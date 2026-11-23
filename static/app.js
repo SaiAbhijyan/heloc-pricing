@@ -220,7 +220,8 @@ function renderEngineTracePanel(data) {
     return;
   }
   panel.classList.remove("hidden");
-  el.innerHTML = renderEngineTrace(data.trace);
+  panel.open = true;
+  el.innerHTML = renderEngineTrace(data.trace, { summary: data.summary });
 }
 
 function renderResults(data) {

@@ -59,7 +59,8 @@ document.getElementById("send").addEventListener("click", async () => {
     const parsed = JSON.parse(text);
     if (parsed.trace?.length) {
       traceWrap.classList.remove("hidden");
-      traceEl.innerHTML = renderEngineTrace(parsed.trace);
+      traceWrap.open = true;
+      traceEl.innerHTML = renderEngineTrace(parsed.trace, { summary: parsed.summary });
     } else {
       traceWrap.classList.add("hidden");
       traceEl.innerHTML = "";

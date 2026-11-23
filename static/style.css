@@ -91,8 +91,10 @@ th { background: #f8fafc; }
 .engine-trace { list-style: none; margin: 0.75rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.65rem; }
 .trace-step { border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem 0.75rem; }
 .trace-step.trace-fail { border-color: #fecdca; background: #fffbfb; }
-.trace-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-.trace-name { font-weight: 600; font-family: ui-monospace, monospace; font-size: 0.88rem; }
+.trace-head { display: flex; align-items: center; gap: 0.45rem; flex-wrap: nowrap; }
+.trace-num { font-weight: 600; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+.trace-name { font-weight: 600; font-family: ui-monospace, monospace; font-size: 0.85rem; flex-shrink: 0; }
+.trace-sum { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.84rem; color: var(--text-muted, #475569); }
 .trace-ico { width: 1.1rem; text-align: center; font-weight: 700; }
 .trace-step.trace-ok .trace-ico { color: var(--ok); }
 .trace-step.trace-fail .trace-ico { color: var(--danger); }
@@ -100,6 +102,9 @@ th { background: #f8fafc; }
 .trace-matched { margin: 0.35rem 0 0; font-size: 0.85rem; }
 .trace-attrs { list-style: none; margin: 0.35rem 0 0; padding: 0; font-size: 0.85rem; }
 .trace-attr { padding: 0.2rem 0; border-top: 1px dashed var(--border); }
+.trace-attr-line { display: flex; align-items: center; gap: 0.45rem; padding: 0.15rem 0 0.15rem 1.5rem; font-size: 0.84rem; border-top: 1px dashed var(--border); }
+.trace-attr-line:first-child { border-top: none; margin-top: 0.25rem; }
+.trace-attr-sum { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 .trace-out-details { margin-top: 0.35rem; font-size: 0.82rem; }
 .trace-out { margin: 0.25rem 0 0; font-size: 0.75rem; max-height: 10rem; overflow: auto; background: #f8fafc; padding: 0.45rem; border-radius: 6px; }
 .filters .inline { font-size: 0.85rem; display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; }

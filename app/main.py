@@ -95,14 +95,14 @@ def list_products():
     return {"product_ids": sorted({r["product_id"] for r in rows})}
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def index():
     from fastapi.responses import FileResponse
 
     return FileResponse(STATIC / "index.html")
 
 
-@app.get("/admin")
+@app.get("/admin", include_in_schema=False)
 async def admin_page():
     from fastapi.responses import FileResponse
 
@@ -115,22 +115,22 @@ def _page(name: str):
     return FileResponse(STATIC / name)
 
 
-@app.get("/ratesheet")
+@app.get("/ratesheet", include_in_schema=False)
 async def ratesheet_page():
     return _page("ratesheet.html")
 
 
-@app.get("/grids")
+@app.get("/grids", include_in_schema=False)
 async def grids_page():
     return _page("grids.html")
 
 
-@app.get("/margins")
+@app.get("/margins", include_in_schema=False)
 async def margins_page():
     return _page("margins.html")
 
 
-@app.get("/explorer")
+@app.get("/explorer", include_in_schema=False)
 async def explorer_page():
     from fastapi.responses import FileResponse
 

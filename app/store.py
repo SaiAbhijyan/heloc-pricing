@@ -94,7 +94,7 @@ def save_rate_sheet(rows: list[dict], filename: str = "upload") -> None:
                     str(r["base_price"]),
                 ),
             )
-    _set_meta("rate_sheet", filename)
+    _set_meta("rate-sheet", filename)
 
 
 def load_rate_sheet() -> list[dict]:
@@ -164,7 +164,7 @@ def save_grid_a(data: dict, filename: str = "upload") -> None:
                     json.dumps(r["cells"]),
                 ),
             )
-    _set_meta("grid_a", filename)
+    _set_meta("grid-a", filename)
 
 
 def load_grid_a() -> dict | None:
@@ -208,7 +208,7 @@ def save_grid_b(data: dict, filename: str = "upload") -> None:
                     json.dumps(r["cells"]),
                 ),
             )
-    _set_meta("grid_b", filename)
+    _set_meta("grid-b", filename)
 
 
 def load_grid_b() -> dict | None:

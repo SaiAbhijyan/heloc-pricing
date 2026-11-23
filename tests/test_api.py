@@ -20,6 +20,19 @@ def test_health(client):
     assert client.get("/api/health").json()["status"] == "ok"
 
 
+def test_auto_seed_admin_meta(fresh_db):
+    with TestClient(app) as client:
+        for component, fname in (
+            ("rate-sheet", "SYNTHETIC_rate_sheet.csv"),
+            ("grid-a", "SYNTHETIC_grid_a.csv"),
+            ("grid-b", "SYNTHETIC_grid_b.csv"),
+            ("margins", "SYNTHETIC_margins.csv"),
+        ):
+            meta = client.get(f"/api/admin/{component}").json()["meta"]
+            assert meta and meta["uploaded_at"]
+            assert meta["filename"] == f"{fname} (auto-seed)"
+
+
 def test_missing_config_409(fresh_db):
     c = TestClient(app)
     r = c.post(

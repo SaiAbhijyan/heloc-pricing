@@ -25,7 +25,7 @@ def load_all() -> None:
         result = parser(data, fname)
         if not result.ok:
             raise RuntimeError(f"seed parse failed for {fname}: {result.errors}")
-        saver(result.rows, fname)
+        saver(result.rows, f"{fname} (auto-seed)")
 
 
 if __name__ == "__main__":

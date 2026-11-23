@@ -1,0 +1,117 @@
+{
+  "scenarios": [
+    {
+      "name": "clean_eligible",
+      "loan": {
+        "heloc_amount": 150000,
+        "first_lien_balance": 320000,
+        "lock_period_days": 45
+      },
+      "borrower": {
+        "fico": 760,
+        "dti": 32
+      },
+      "property": {
+        "value": 650000,
+        "occupancy": "primary",
+        "property_type": "single_family"
+      }
+    },
+    {
+      "name": "high_cltv",
+      "loan": {
+        "heloc_amount": 200000,
+        "first_lien_balance": 450000
+      },
+      "borrower": {
+        "fico": 720,
+        "dti": 38
+      },
+      "property": {
+        "value": 700000,
+        "occupancy": "primary",
+        "property_type": "single_family"
+      }
+    },
+    {
+      "name": "low_fico",
+      "loan": {
+        "heloc_amount": 75000,
+        "first_lien_balance": 180000
+      },
+      "borrower": {
+        "fico": 625,
+        "dti": 40
+      },
+      "property": {
+        "value": 350000,
+        "occupancy": "primary",
+        "property_type": "single_family"
+      }
+    },
+    {
+      "name": "investment_condo",
+      "loan": {
+        "heloc_amount": 120000,
+        "first_lien_balance": 0
+      },
+      "borrower": {
+        "fico": 700,
+        "dti": 42
+      },
+      "property": {
+        "value": 400000,
+        "occupancy": "investment",
+        "property_type": "condo"
+      }
+    },
+    {
+      "name": "high_dti",
+      "loan": {
+        "heloc_amount": 90000,
+        "first_lien_balance": 220000
+      },
+      "borrower": {
+        "fico": 710,
+        "dti": 48
+      },
+      "property": {
+        "value": 480000,
+        "occupancy": "primary",
+        "property_type": "pud"
+      }
+    },
+    {
+      "name": "jumbo_line",
+      "loan": {
+        "heloc_amount": 550000,
+        "first_lien_balance": 400000
+      },
+      "borrower": {
+        "fico": 780,
+        "dti": 28
+      },
+      "property": {
+        "value": 1200000,
+        "occupancy": "primary",
+        "property_type": "single_family"
+      }
+    },
+    {
+      "name": "out_of_margin_range",
+      "loan": {
+        "heloc_amount": 15000,
+        "first_lien_balance": 100000
+      },
+      "borrower": {
+        "fico": 740,
+        "dti": 35
+      },
+      "property": {
+        "value": 280000,
+        "occupancy": "primary",
+        "property_type": "single_family"
+      }
+    }
+  ]
+}

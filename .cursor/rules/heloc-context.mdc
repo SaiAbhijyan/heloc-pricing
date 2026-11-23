@@ -1,0 +1,12 @@
+---
+description: HELOC pricing project context
+alwaysApply: true
+---
+
+# HELOC pricing context
+
+- Clean-room: never use `/workspace/loan-pricing`.
+- Local repo only; never push or add remotes.
+- Stack: Python 3.12, FastAPI, sqlite3, Decimal in `app/pricing.py`, static HTML/JS.
+- Synthetic/example data only; label SYNTHETIC in UI and examples.
+- Ponytail rules apply (`ponytail.mdc`).

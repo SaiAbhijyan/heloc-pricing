@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLPA grids</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav id="nav"></nav>
+  <main>
+    <div class="card">
+      <h1>LLPA grid A</h1>
+      <p id="metaA"></p>
+      <div id="dropZoneA" class="card">Drop grid A CSV or <label><input type="file" id="fileInputA" accept=".csv" /> choose</label></div>
+      <p id="uploadErrA" class="err hidden"></p>
+      <div class="row">
+        <a href="/api/admin/grid-a/download" class="ghost" style="padding:0.55rem 0.9rem">Download A</a>
+        <button type="button" id="saveA">Save grid A edits</button>
+      </div>
+      <div id="tableA" style="overflow:auto;margin-top:0.5rem"></div>
+    </div>
+    <div class="card">
+      <h1>LLPA grid B</h1>
+      <p id="metaB"></p>
+      <div id="dropZoneB" class="card">Drop grid B CSV or <label><input type="file" id="fileInputB" accept=".csv" /> choose</label></div>
+      <p id="uploadErrB" class="err hidden"></p>
+      <div class="row">
+        <a href="/api/admin/grid-b/download" class="ghost" style="padding:0.55rem 0.9rem">Download B</a>
+        <button type="button" id="saveB">Save grid B edits</button>
+      </div>
+      <div id="tableB" style="overflow:auto;margin-top:0.5rem"></div>
+    </div>
+  </main>
+  <script src="/static/nav.js"></script>
+  <script src="/static/grids.js"></script>
+</body>
+</html>

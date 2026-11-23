@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Margins</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav id="nav"></nav>
+  <main>
+    <div class="card">
+      <h1>Margins (SYNTHETIC)</h1>
+      <p id="meta"></p>
+      <div id="dropZone" class="card">Drop CSV here or <label><input type="file" id="fileInput" accept=".csv" /> choose file</label></div>
+      <div id="previewBox"></div>
+      <p id="uploadErr" class="err hidden"></p>
+      <div class="row">
+        <button type="button" id="saveUpload" class="secondary">Save upload</button>
+        <a href="/api/admin/margins/download" class="ghost" style="padding:0.55rem 0.9rem">Download CSV</a>
+        <button type="button" id="saveEdit">Save table edits</button>
+        <button type="button" id="addRow" class="ghost">Add row</button>
+      </div>
+    </div>
+    <div class="card" style="overflow:auto">
+      <table id="tbl"><thead></thead><tbody></tbody></table>
+    </div>
+  </main>
+  <script src="/static/nav.js"></script>
+  <script src="/static/admin-common.js"></script>
+  <script src="/static/margins.js"></script>
+</body>
+</html>

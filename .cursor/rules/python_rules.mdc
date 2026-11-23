@@ -1,0 +1,13 @@
+---
+description: Python conventions for this repo
+globs: **/*.py
+alwaysApply: false
+---
+
+# Python
+
+- Target 3.12; use `from __future__ import annotations` in app modules.
+- Prefer stdlib; pinned deps in `requirements.txt` only.
+- FastAPI routes stay thin; business logic in `app/pricing.py` and `app/parsers.py`.
+- SQLite via `app/store.py`; no ORM.
+- Run `pytest -q` after non-trivial changes to pricing or parsers.

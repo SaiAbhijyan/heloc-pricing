@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API explorer</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav id="nav"></nav>
+  <main>
+    <div class="card">
+      <h1>API explorer</h1>
+      <p>OpenAPI docs: <a href="/docs">/docs</a></p>
+      <label>Scenario</label>
+      <select id="scenario"></select>
+      <label>POST /api/eligibility body (JSON)</label>
+      <textarea id="body" rows="16"></textarea>
+      <div class="row" style="margin-top:0.5rem">
+        <button type="button" id="send">Send</button>
+        <button type="button" id="curl" class="ghost">Copy as curl</button>
+      </div>
+      <p id="timing"></p>
+      <pre id="response"></pre>
+    </div>
+  </main>
+  <script src="/static/nav.js"></script>
+  <script src="/static/explorer.js"></script>
+</body>
+</html>

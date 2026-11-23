@@ -1,0 +1,13 @@
+---
+description: Pricing and parser conventions
+globs: app/pricing.py,app/parsers.py,app/bands.py,tests/**
+alwaysApply: false
+---
+
+# Pricing core
+
+- Keep `app/pricing.py` free of I/O; pass config as plain dicts/lists.
+- Use `Decimal` for money and rates; round only in `app/serialize.py` for API output.
+- Band logic lives in `app/bands.py`; parsers call overlap checks before save.
+- Ineligible paths must set explicit `reasons`; no silent catch-all eligibility.
+- Tests in `tests/` must cover boundary bands and upload validation.

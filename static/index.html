@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HELOC Eligibility</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav id="nav"></nav>
+  <main>
+    <div class="card">
+      <h1>HELOC eligibility &amp; pricing</h1>
+      <p class="muted">All numbers on this site are <strong>SYNTHETIC</strong> examples only.</p>
+      <div class="grid2">
+        <section>
+          <h2>Loan</h2>
+          <label>HELOC line amount ($)</label>
+          <input id="heloc_amount" type="number" min="1" step="1000" value="150000" />
+          <label>First lien balance ($)</label>
+          <input id="first_lien_balance" type="number" min="0" step="1000" value="320000" />
+          <label>Lock period (days, optional)</label>
+          <input id="lock_period_days" type="number" placeholder="all locks" />
+          <label>Product id (optional)</label>
+          <input id="product_id" type="text" placeholder="filter one product" />
+        </section>
+        <section>
+          <h2>Borrower</h2>
+          <label>FICO (300–850)</label>
+          <input id="fico" type="number" min="300" max="850" value="760" />
+          <label>DTI (%)</label>
+          <input id="dti" type="number" min="0" max="100" step="0.1" value="32" />
+        </section>
+        <section>
+          <h2>Property</h2>
+          <label>Property value ($)</label>
+          <input id="value" type="number" min="1" step="1000" value="650000" />
+          <label>Occupancy</label>
+          <select id="occupancy">
+            <option value="primary">primary</option>
+            <option value="second_home">second_home</option>
+            <option value="investment">investment</option>
+          </select>
+          <label>Property type</label>
+          <input id="property_type" type="text" value="single_family" />
+          <p>CLTV: <span id="cltvLive">—</span>%</p>
+        </section>
+      </div>
+      <div class="row" style="margin-top:0.75rem">
+        <button type="button" id="runBtn">Get eligibility</button>
+        <span id="scenarioBtns"></span>
+      </div>
+      <p id="formErr" class="err hidden"></p>
+    </div>
+    <p id="summary" class="hidden"></p>
+    <div id="eligible" class="card hidden"></div>
+    <div id="ineligible" class="card hidden"></div>
+  </main>
+  <script src="/static/nav.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

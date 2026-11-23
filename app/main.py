@@ -14,7 +14,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import parsers, store
-from app.models import EligibilityRequest, loan_dict
+from app.models import (
+    OPENAPI_DESCRIPTION,
+    AdminGetResponse,
+    EligibilityRequest,
+    EligibilityResponse,
+    HealthResponse,
+    ProductsResponse,
+    PutOkResponse,
+    ScenariosResponse,
+    UploadErrorResponse,
+    UploadOkResponse,
+    UploadPreviewResponse,
+    loan_dict,
+)
 from app.pricing import run_pricing
 from app.serialize import format_result_payload
 
@@ -32,13 +45,28 @@ async def _lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="HELOC Pricing Engine", version="1.0.0", lifespan=_lifespan)
+app = FastAPI(
+    title="HELOC Pricing Engine",
+    version="1.0.0",
+    description=OPENAPI_DESCRIPTION,
+    lifespan=_lifespan,
+    openapi_tags=[
+        {"name": "Pricing", "description": "Eligibility and pricing for HELOC scenarios."},
+        {"name": "Admin", "description": "Rate sheet, LLPA grids, and margin configuration (CSV/XLSX upload or JSON save)."},
+        {"name": "Meta", "description": "Health, products, and SYNTHETIC scenario fixtures."},
+    ],
+)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
-@app.get("/api/health")
+@app.get(
+    "/api/health",
+    tags=["Meta"],
+    summary="Health check",
+    response_model=HealthResponse,
+)
 def health():
     return {"status": "ok"}
 
@@ -54,7 +82,12 @@ def favicon():
     return Response(content=svg, media_type="image/svg+xml")
 
 
-@app.get("/api/products")
+@app.get(
+    "/api/products",
+    tags=["Meta"],
+    summary="List product IDs from rate sheet",
+    response_model=ProductsResponse,
+)
 def list_products():
     rows = store.load_rate_sheet()
     if not rows:
@@ -104,7 +137,12 @@ async def explorer_page():
     return FileResponse(STATIC / "explorer.html")
 
 
-@app.get("/api/scenarios")
+@app.get(
+    "/api/scenarios",
+    tags=["Meta"],
+    summary="SYNTHETIC scenario payloads for testing",
+    response_model=ScenariosResponse,
+)
 def list_scenarios():
     path = EXAMPLES / "SYNTHETIC_scenarios.json"
     if not path.exists():
@@ -121,8 +159,26 @@ def _missing_response():
         )
 
 
-@app.post("/api/eligibility")
-def eligibility(body: EligibilityRequest):
+@app.post(
+    "/api/eligibility",
+    tags=["Pricing"],
+    summary="Price all rate-sheet rows for a borrower scenario",
+    description="Runs the eight-step pricing engine. Grid LLPAs and margin are borrower-level and reused across every rate row. "
+    "Set `trace=false` to omit the execution trace from the response.",
+    response_model=EligibilityResponse,
+    response_model_exclude_none=True,
+    responses={
+        409: {"description": "Missing rate sheet, grids, or margins configuration"},
+        422: {"description": "Request validation failed"},
+    },
+)
+def eligibility(
+    body: EligibilityRequest,
+    trace: bool = Query(
+        True,
+        description="Include ordered engine execution trace (eight steps) in the response.",
+    ),
+):
     _missing_response()
     payload = run_pricing(
         loan_dict(body.loan),
@@ -132,8 +188,9 @@ def eligibility(body: EligibilityRequest):
         store.load_grid_a(),
         store.load_grid_b(),
         store.load_margins(),
+        with_trace=trace,
     )
-    return format_result_payload(payload)
+    return format_result_payload(payload, include_trace=trace)
 
 
 PARSERS = {
@@ -151,7 +208,12 @@ SAVERS = {
 }
 
 
-@app.get("/api/admin/{component}")
+@app.get(
+    "/api/admin/{component}",
+    tags=["Admin"],
+    summary="Read configuration table",
+    response_model=AdminGetResponse,
+)
 def admin_get(component: str):
     key = component
     if key not in PARSERS:
@@ -159,11 +221,24 @@ def admin_get(component: str):
     return store.admin_get(key)
 
 
-@app.post("/api/admin/{component}")
+@app.post(
+    "/api/admin/{component}",
+    tags=["Admin"],
+    summary="Upload configuration file",
+    description="Multipart field `file`: CSV or XLSX (rate-sheet also accepts XLSX). "
+    "All rows are validated before save; overlapping bands reject the upload. "
+    "Use `preview=true` for a dry-run (first 20 rows + summary). "
+    "On validation failure the response is `{ok: false, errors: [...]}` with row/column messages.",
+    response_model=UploadOkResponse | UploadPreviewResponse,
+    responses={
+        400: {"model": UploadErrorResponse, "description": "Validation errors"},
+        404: {"description": "Unknown component"},
+    },
+)
 async def admin_upload(
     component: str,
-    file: UploadFile = File(...),
-    preview: bool = Query(False),
+    file: UploadFile = File(..., description="CSV or XLSX configuration file"),
+    preview: bool = Query(False, description="Validate only; do not write to the database"),
 ):
     key = component
     if key not in PARSERS:
@@ -253,7 +328,12 @@ class GridBBody(BaseModel):
     rows: list[dict]
 
 
-@app.put("/api/admin/rate-sheet")
+@app.put(
+    "/api/admin/rate-sheet",
+    tags=["Admin"],
+    summary="Save rate sheet from browser table edit",
+    response_model=PutOkResponse,
+)
 def put_rate_sheet(body: RateSheetBody):
     result = parsers.rows_from_json_rate_sheet(body.rows)
     if not result.ok:
@@ -262,7 +342,12 @@ def put_rate_sheet(body: RateSheetBody):
     return {"ok": True}
 
 
-@app.put("/api/admin/margins")
+@app.put(
+    "/api/admin/margins",
+    tags=["Admin"],
+    summary="Save margins from browser table edit",
+    response_model=PutOkResponse,
+)
 def put_margins(body: MarginsBody):
     result = parsers.rows_from_json_margins(body.rows)
     if not result.ok:
@@ -300,7 +385,12 @@ def _grid_a_from_body(body: GridABody) -> parsers.ParseResult:
     )
 
 
-@app.put("/api/admin/grid-a")
+@app.put(
+    "/api/admin/grid-a",
+    tags=["Admin"],
+    summary="Save grid A from browser table edit",
+    response_model=PutOkResponse,
+)
 def put_grid_a(body: GridABody):
     result = _grid_a_from_body(body)
     if not result.ok:
@@ -353,7 +443,12 @@ def _grid_b_from_body(body: GridBBody) -> parsers.ParseResult:
     )
 
 
-@app.put("/api/admin/grid-b")
+@app.put(
+    "/api/admin/grid-b",
+    tags=["Admin"],
+    summary="Save grid B from browser table edit",
+    response_model=PutOkResponse,
+)
 def put_grid_b(body: GridBBody):
     result = _grid_b_from_body(body)
     if not result.ok:
@@ -362,7 +457,12 @@ def put_grid_b(body: GridBBody):
     return {"ok": True}
 
 
-@app.get("/api/admin/{component}/download")
+@app.get(
+    "/api/admin/{component}/download",
+    tags=["Admin"],
+    summary="Download configuration as CSV",
+    include_in_schema=True,
+)
 def download_csv(component: str):
     key = component
     if key == "rate-sheet":

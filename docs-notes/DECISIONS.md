@@ -23,3 +23,4 @@
 | A11 | DTI percent; FICO 300–850; invalid request → 422. | Additional fields (state, lien position)? |
 | A12 | Results sorted by product, lock, then final_price descending among eligible. | Sort by rate instead for some channels? |
 | A13 | Best execution per product: lowest final rate among eligible rows with final price ≥ 100 (par); if none at/above par, highest final price. UI default shows one par-pick row per product×investor×lock (same rule); toggle shows full ladder. | Confirm par floor vs best-rate tie-break when multiple investors hit par. |
+| T1 | `POST /api/eligibility` returns an ordered `trace` (eight named steps) built in `app/pricing.py` with `time.perf_counter`; grid A/B LLPAs and margin are borrower-level and computed once per request (`reused_across_rate_rows` in trace). `?trace=false` omits the field. OpenAPI documents `TraceStep` and `EligibilityResponse`. | Should trace include per-rate-row timings when volume is high? |

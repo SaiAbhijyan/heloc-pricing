@@ -8,5 +8,6 @@ alwaysApply: true
 - Clean-room: never use `/workspace/loan-pricing`.
 - Local repo only; never push or add remotes.
 - Stack: Python 3.12, FastAPI, sqlite3, Decimal in `app/pricing.py`, static HTML/JS.
+- Eligibility API returns optional eight-step `trace` (default on; `?trace=false`); OpenAPI at `/docs`.
 - SYNTHETIC examples only; auto-seed on startup when DB empty; `HELOC_DB` env for path.
 - Ponytail rules apply (`ponytail.mdc`).

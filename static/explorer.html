@@ -12,7 +12,7 @@
   <main>
     <div class="card">
       <h1>API explorer</h1>
-      <p>OpenAPI: <a href="/docs">/docs</a></p>
+      <p>OpenAPI: <a href="/docs">/docs</a> · <a href="/docs#/Pricing/post_api_eligibility">Open in Swagger (eligibility)</a></p>
       <ul class="endpoint-list">
         <li><code>GET</code> <code>/api/health</code> — liveness</li>
         <li><code>POST</code> <code>/api/eligibility</code> — price all rate-sheet rows</li>
@@ -29,10 +29,15 @@
         <button type="button" id="curl" class="ghost">Copy as curl</button>
       </div>
       <p id="timing" class="muted"></p>
+      <details id="traceTimelineWrap" class="engine-trace-panel hidden">
+        <summary><strong>Engine trace</strong></summary>
+        <div id="traceTimeline"></div>
+      </details>
       <pre id="response" class="response-box"></pre>
     </div>
   </main>
   <script src="/static/nav.js"></script>
+  <script src="/static/trace-ui.js"></script>
   <script src="/static/explorer.js"></script>
 </body>
 </html>

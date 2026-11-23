@@ -106,7 +106,16 @@ def _summary(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def format_result_payload(payload: dict) -> dict:
+def _format_trace(trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for step in trace:
+        s = _num(dict(step))
+        s["duration_ms"] = float(step["duration_ms"])
+        out.append(s)
+    return out
+
+
+def format_result_payload(payload: dict, *, include_trace: bool = True) -> dict:
     results_in = payload.get("results", [])
     summary = _summary(results_in)
     best_ids = _best_row_ids(results_in)
@@ -135,4 +144,10 @@ def format_result_payload(payload: dict) -> dict:
     if "inputs" in out and "cltv" in out["inputs"]:
         out["inputs"] = dict(out["inputs"])
         out["inputs"]["cltv"] = _num(out["inputs"]["cltv"], 2)
+    if include_trace and payload.get("trace") is not None:
+        out["trace"] = _format_trace(payload["trace"])
+    elif not include_trace:
+        out.pop("trace", None)
+    elif "trace" in out:
+        del out["trace"]
     return _num(out)

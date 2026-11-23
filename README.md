@@ -48,4 +48,4 @@ curl -s -X POST http://127.0.0.1:8811/api/eligibility \
   -d '{"loan":{"heloc_amount":150000,"first_lien_balance":320000,"lock_period_days":45},"borrower":{"fico":760,"dti":32},"property":{"value":650000,"occupancy":"primary","property_type":"single_family"}}'
 ```
 
-Response includes `inputs.cltv`, `results[]` with `eligible`, LLPAs, margin, `final_price`, and `reasons`.
+Response includes `inputs.cltv`, `results[]` with `eligible`, LLPAs, margin, `final_price`, `reasons`, per-row `steps`, plus `summary` and an ordered eight-step engine `trace` (omit with `?trace=false`). OpenAPI at `/docs` documents request/response models including `TraceStep`.

@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.pricing import TRACE_STEP_NAMES
 from app.serialize import pick_best_execution
 
 EX = Path(__file__).resolve().parent.parent / "examples"
@@ -135,10 +136,10 @@ def test_synthetic_rate_ladder_row_count(client):
         groups.setdefault(k, []).append(r)
     for g in groups.values():
         assert len(g) == 6
-        rates = sorted(x["base_rate"] for x in g)
+        rates = sorted(float(x["base_rate"]) for x in g)
         for i in range(1, len(rates)):
             assert abs(rates[i] - rates[i - 1] - 0.125) < 0.0001
-        prices = sorted(x["base_price"] for x in g)
+        prices = sorted(float(x["base_price"]) for x in g)
         for i in range(1, len(prices)):
             assert abs(prices[i] - prices[i - 1] - 0.75) < 0.0001
 
@@ -251,6 +252,67 @@ def test_synthetic_investor_names(client):
 def test_favicon(client):
     r = client.get("/favicon.ico")
     assert r.status_code == 200
+
+
+def test_trace_ordered_eight_steps(client):
+    r = client.post(
+        "/api/eligibility",
+        json={
+            "loan": {
+                "heloc_amount": 150000,
+                "first_lien_balance": 320000,
+                "lock_period_days": 45,
+            },
+            "borrower": {"fico": 760, "dti": 32},
+            "property": {
+                "value": 650000,
+                "occupancy": "primary",
+                "property_type": "single_family",
+            },
+        },
+    )
+    assert r.status_code == 200
+    trace = r.json()["trace"]
+    assert len(trace) == 8
+    assert [t["name"] for t in trace] == list(TRACE_STEP_NAMES)
+    assert trace[3]["output"]["reused_across_rate_rows"] is True
+
+
+def test_trace_false_omits(client):
+    r = client.post(
+        "/api/eligibility?trace=false",
+        json={
+            "loan": {"heloc_amount": 150000, "first_lien_balance": 320000},
+            "borrower": {"fico": 760, "dti": 32},
+            "property": {
+                "value": 650000,
+                "occupancy": "primary",
+                "property_type": "single_family",
+            },
+        },
+    )
+    assert r.status_code == 200
+    assert "trace" not in r.json()
+
+
+def test_trace_high_dti_fail_step(client):
+    body = _post_scenario(client, "High DTI (NA)").json()
+    gb = next(t for t in body["trace"] if t["name"] == "match_grid_b_llpas")
+    assert gb["status"] == "fail"
+    dti = next(a for a in gb["output"]["attributes"] if a["attribute"] == "dti")
+    assert dti["status"] == "fail"
+    assert dti.get("reason") and "NA" in dti["reason"]
+
+
+def test_openapi_eligibility_schema(client):
+    spec = client.get("/openapi.json").json()
+    post = spec["paths"]["/api/eligibility"]["post"]
+    assert post["tags"] == ["Pricing"]
+    assert "EligibilityResponse" in post["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    models = spec["components"]["schemas"]
+    assert "TraceStep" in models
+    assert "EligibilityResponse" in models
+    assert "trace" in models["EligibilityResponse"]["properties"]
 
 
 def test_put_margins_validation(client):

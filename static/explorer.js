@@ -53,9 +53,20 @@ document.getElementById("send").addEventListener("click", async () => {
   const ms = (performance.now() - t0).toFixed(0);
   const text = await res.text();
   document.getElementById("timing").textContent = `HTTP ${res.status} in ${ms} ms`;
+  const traceWrap = document.getElementById("traceTimelineWrap");
+  const traceEl = document.getElementById("traceTimeline");
   try {
-    document.getElementById("response").textContent = JSON.stringify(JSON.parse(text), null, 2);
+    const parsed = JSON.parse(text);
+    if (parsed.trace?.length) {
+      traceWrap.classList.remove("hidden");
+      traceEl.innerHTML = renderEngineTrace(parsed.trace);
+    } else {
+      traceWrap.classList.add("hidden");
+      traceEl.innerHTML = "";
+    }
+    document.getElementById("response").textContent = JSON.stringify(parsed, null, 2);
   } catch {
+    traceWrap.classList.add("hidden");
     document.getElementById("response").textContent = text;
   }
 });

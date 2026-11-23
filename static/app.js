@@ -212,10 +212,22 @@ function renderIneligibleGroups(ineligible) {
     .join("");
 }
 
+function renderEngineTracePanel(data) {
+  const panel = $("tracePanel");
+  const el = $("engineTrace");
+  if (!data.trace?.length) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  el.innerHTML = renderEngineTrace(data.trace);
+}
+
 function renderResults(data) {
   lastData = data;
   $("resultsPanel").classList.remove("hidden");
   renderSummaryBar(data);
+  renderEngineTracePanel(data);
   fillFilterOptions(data);
 
   let eligible = data.results.filter((r) => r.eligible && passFilters(r));

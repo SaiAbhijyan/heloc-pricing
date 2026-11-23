@@ -46,7 +46,7 @@ Upload validates all rows before save. Overlapping bands in one axis/attribute r
 
 ## API
 
-- `POST /api/eligibility` — price all rate-sheet rows (optional lock/product filter)
+- `POST /api/eligibility` — price all rate-sheet rows (optional lock/product filter); optional `?trace=false` (default includes eight-step engine trace)
 - `GET/POST /api/admin/{rate-sheet|grid-a|grid-b|margins}` — read or file upload (`preview=true` for dry run)
 - `PUT /api/admin/{...}` — browser table save with same validation
 - `GET /api/health`

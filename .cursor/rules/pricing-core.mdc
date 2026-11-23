@@ -7,6 +7,7 @@ alwaysApply: false
 # Pricing core
 
 - Keep `app/pricing.py` free of I/O; pass config as plain dicts/lists.
+- Engine execution `trace` (eight steps) is built in `app/pricing.py` with `time.perf_counter`; grid LLPAs computed once per borrower.
 - Use `Decimal` for money and rates; round only in `app/serialize.py` for API output.
 - Band logic lives in `app/bands.py`; parsers call overlap checks before save.
 - Ineligible paths must set explicit `reasons`; no silent catch-all eligibility.

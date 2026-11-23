@@ -1,11 +1,23 @@
 """Pure pricing and eligibility (Decimal, no I/O)."""
 from __future__ import annotations
 
+import time
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from app.bands import in_band
 from app.parsers import NA_VALUES
+
+TRACE_STEP_NAMES = (
+    "validate_input",
+    "compute_cltv",
+    "load_rate_sheet_rows",
+    "match_grid_a_llpa",
+    "match_grid_b_llpas",
+    "apply_margin",
+    "eligibility_checks",
+    "compute_final_price",
+)
 
 GRID_B_ATTR_ORDER = ("occupancy", "property_type", "fico", "loan_amount", "dti")
 _NA_UPPER = {x.upper() for x in NA_VALUES if x}
@@ -137,6 +149,59 @@ def _grid_b_no_row(attr: str, prop: dict, borrower: dict, heloc: Decimal) -> str
     return f"Grid B: DTI {borrower['dti']} is outside all DTI bands"
 
 
+def grid_b_attribute_trace(
+    borrower: dict[str, Any],
+    prop: dict[str, Any],
+    heloc: Decimal,
+    cltv: Decimal,
+    grid: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None, bool]:
+    """Per-attribute match detail for engine trace (borrower-level)."""
+    idx, col_label = find_cltv_column(cltv, grid["cltv_labels"], grid["cltv_bands"])
+    cltv_ok = idx is not None
+    rows_by_attr: dict[str, list[dict]] = {}
+    for row in grid["rows"]:
+        rows_by_attr.setdefault(row["attribute"], []).append(row)
+    attrs: list[dict[str, Any]] = []
+    for attr in GRID_B_ATTR_ORDER:
+        entry: dict[str, Any] = {"attribute": attr, "status": "ok", "matched": None, "value": None}
+        candidates = rows_by_attr.get(attr, [])
+        matched = [r for r in candidates if match_grid_b_row(attr, borrower, prop, heloc, r)]
+        if len(matched) == 0:
+            entry["status"] = "fail"
+            entry["reason"] = _grid_b_no_row(attr, prop, borrower, heloc)
+            attrs.append(entry)
+            continue
+        if len(matched) > 1:
+            key = borrower["fico"] if attr == "fico" else prop.get(attr, heloc)
+            entry["status"] = "fail"
+            entry["reason"] = f"Grid B: {len(matched)} rows match {attr} {key} (overlap)"
+            attrs.append(entry)
+            continue
+        if not cltv_ok:
+            entry["status"] = "fail"
+            entry["reason"] = _cltv_outside_reason(
+                cltv, grid["cltv_labels"], grid["cltv_bands"], "grid B"
+            )
+            attrs.append(entry)
+            continue
+        m = matched[0]
+        raw = m["cells"].get(col_label, "")
+        band_label = f"{attr}={m['band']}"
+        val, c_err = cell_adjustment(raw, "Grid B", band_label, col_label)
+        if c_err:
+            entry["status"] = "fail"
+            entry["reason"] = c_err
+            entry["matched"] = {"row": band_label, "column": col_label, "raw": raw}
+            attrs.append(entry)
+            continue
+        assert val is not None
+        entry["matched"] = {"row": band_label, "column": col_label, "raw": raw}
+        entry["value"] = val
+        attrs.append(entry)
+    return attrs, col_label, cltv_ok
+
+
 def grid_b_llpa(
     borrower: dict[str, Any],
     prop: dict[str, Any],
@@ -228,6 +293,25 @@ def margin_points(row: dict[str, Any], heloc: Decimal) -> Decimal:
     return pct + dollar / heloc * Decimal(100)
 
 
+def _borrower_cache(
+    borrower: dict[str, Any],
+    prop: dict[str, Any],
+    heloc: Decimal,
+    cltv: Decimal,
+    grid_a: dict,
+    grid_b: dict,
+    margins: list[dict],
+) -> dict[str, Any]:
+    ga, ga_val, ga_reasons = grid_a_llpa(borrower["fico"], cltv, grid_a)
+    gb, gb_val, gb_reasons = grid_b_llpa(borrower, prop, heloc, cltv, grid_b)
+    m_row, m_err = find_margin_row(heloc, margins)
+    return {
+        "grid_a": (ga, ga_val, ga_reasons),
+        "grid_b": (gb, gb_val, gb_reasons),
+        "margin": (m_row, m_err),
+    }
+
+
 def price_one_rate_row(
     rate_row: dict[str, Any],
     borrower: dict[str, Any],
@@ -237,24 +321,29 @@ def price_one_rate_row(
     grid_a: dict,
     grid_b: dict,
     margins: list[dict],
+    borrower_cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     reasons: list[str] = []
     llpas: list[dict] = []
     llpa_total = Decimal(0)
 
-    ga, ga_val, ga_reasons = grid_a_llpa(borrower["fico"], cltv, grid_a)
+    if borrower_cache is None:
+        borrower_cache = _borrower_cache(
+            borrower, prop, heloc, cltv, grid_a, grid_b, margins
+        )
+    ga, ga_val, ga_reasons = borrower_cache["grid_a"]
     reasons.extend(ga_reasons)
     if not ga_reasons:
         llpas.extend(ga)
         llpa_total += ga_val
 
-    gb, gb_val, gb_reasons = grid_b_llpa(borrower, prop, heloc, cltv, grid_b)
+    gb, gb_val, gb_reasons = borrower_cache["grid_b"]
     reasons.extend(gb_reasons)
     if not gb_reasons:
         llpas.extend(gb)
         llpa_total += gb_val
 
-    m_row, m_err = find_margin_row(heloc, margins)
+    m_row, m_err = borrower_cache["margin"]
     if m_err:
         reasons.append(m_err)
 
@@ -303,6 +392,40 @@ def _ineligible(rate_row: dict, reasons: list[str]) -> dict:
     }
 
 
+def _trace_step(
+    step_n: int,
+    name: str,
+    t0: float,
+    *,
+    inputs: Any,
+    matched: Any,
+    output: Any,
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "step": step_n,
+        "name": name,
+        "inputs": inputs,
+        "matched": matched,
+        "output": output,
+        "status": status,
+        "duration_ms": round((time.perf_counter() - t0) * 1000, 3),
+    }
+
+
+def _grid_a_matched(fico: int, cltv: Decimal, grid_a: dict, ga: list[dict]) -> Any:
+    if not ga:
+        row, _ = find_fico_row_grid_a(fico, grid_a["rows"])
+        idx, col_label = find_cltv_column(cltv, grid_a["cltv_labels"], grid_a["cltv_bands"])
+        if row is None or idx is None:
+            return None
+        fico_hi = row["fico_max"] if row["fico_max"] is not None else "+"
+        row_label = f"FICO {row['fico_min']}-{fico_hi}"
+        return {"grid": "a", "row": row_label, "column": col_label, "cell": row["cells"].get(col_label, "")}
+    ll = ga[0]
+    return {"grid": "a", "row": ll["row"], "column": ll["column"], "cell": str(ll["value"])}
+
+
 def run_pricing(
     loan: dict[str, Any],
     borrower: dict[str, Any],
@@ -311,21 +434,216 @@ def run_pricing(
     grid_a: dict,
     grid_b: dict,
     margins: list[dict],
+    *,
+    with_trace: bool = True,
 ) -> dict[str, Any]:
-    heloc = Decimal(str(loan["heloc_amount"]))
-    first = Decimal(str(loan["first_lien_balance"]))
-    value = Decimal(str(prop["value"]))
-    cltv = round_cltv_for_lookup(calc_cltv(first, heloc, value))
-    lock_filter = loan.get("lock_period_days")
-    product_filter = loan.get("product_id")
-    results: list[dict] = []
+    trace: list[dict[str, Any]] = []
+    step_n = 0
+
+    t0 = time.perf_counter()
+    norm_loan = {
+        "heloc_amount": Decimal(str(loan["heloc_amount"])),
+        "first_lien_balance": Decimal(str(loan["first_lien_balance"])),
+    }
+    if loan.get("lock_period_days") is not None:
+        norm_loan["lock_period_days"] = int(loan["lock_period_days"])
+    if loan.get("product_id"):
+        norm_loan["product_id"] = str(loan["product_id"])
+    norm_borrower = dict(borrower)
+    norm_prop = dict(prop)
+    norm_prop["value"] = Decimal(str(prop["value"]))
+    if with_trace:
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "validate_input",
+                t0,
+                inputs={"loan": loan, "borrower": borrower, "property": prop},
+                matched=None,
+                output={
+                    "loan": {k: (float(v) if isinstance(v, Decimal) else v) for k, v in norm_loan.items()},
+                    "borrower": norm_borrower,
+                    "property": {**norm_prop, "value": float(norm_prop["value"])},
+                },
+                status="ok",
+            )
+        )
+
+    heloc = norm_loan["heloc_amount"]
+    first = norm_loan["first_lien_balance"]
+    value = norm_prop["value"]
+    t0 = time.perf_counter()
+    raw_cltv = calc_cltv(first, heloc, value)
+    cltv = round_cltv_for_lookup(raw_cltv)
+    idx_a, col_a = find_cltv_column(cltv, grid_a["cltv_labels"], grid_a["cltv_bands"])
+    idx_b, col_b = find_cltv_column(cltv, grid_b["cltv_labels"], grid_b["cltv_bands"])
+    if with_trace:
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "compute_cltv",
+                t0,
+                inputs={
+                    "first_lien_balance": first,
+                    "heloc_amount": heloc,
+                    "property_value": value,
+                },
+                matched=None,
+                output={
+                    "raw_cltv": raw_cltv,
+                    "rounded_cltv": cltv,
+                    "grid_a_cltv_column": col_a,
+                    "grid_b_cltv_column": col_b,
+                },
+                status="ok",
+            )
+        )
+
+    lock_filter = norm_loan.get("lock_period_days")
+    product_filter = norm_loan.get("product_id")
+    t0 = time.perf_counter()
+    before = len(rate_sheet)
+    filtered: list[dict] = []
     for row in rate_sheet:
         if product_filter and row["product_id"] != product_filter:
             continue
         if lock_filter is not None and row["lock_period_days"] != lock_filter:
             continue
+        filtered.append(row)
+    investors = sorted({r["investor"] for r in filtered})
+    locks = sorted({int(r["lock_period_days"]) for r in filtered})
+    if with_trace:
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "load_rate_sheet_rows",
+                t0,
+                inputs={"product_id": product_filter, "lock_period_days": lock_filter},
+                matched=None,
+                output={
+                    "rows_before_filter": before,
+                    "rows_after_filter": len(filtered),
+                    "investors": investors,
+                    "lock_periods_days": locks,
+                },
+                status="ok",
+            )
+        )
+
+    t0 = time.perf_counter()
+    cache = _borrower_cache(borrower, prop, heloc, cltv, grid_a, grid_b, margins)
+    ga, ga_val, ga_reasons = cache["grid_a"]
+    ga_status = "fail" if ga_reasons else "ok"
+    if with_trace:
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "match_grid_a_llpa",
+                t0,
+                inputs={"fico": borrower["fico"], "cltv": cltv, "reused_across_rate_rows": True},
+                matched=_grid_a_matched(borrower["fico"], cltv, grid_a, ga),
+                output={
+                    "reused_across_rate_rows": True,
+                    "llpa_value": ga_val if not ga_reasons else None,
+                    "reasons": ga_reasons,
+                },
+                status=ga_status,
+            )
+        )
+
+    t0 = time.perf_counter()
+    gb, gb_val, gb_reasons = cache["grid_b"]
+    gb_attrs, _gb_col, _ = grid_b_attribute_trace(borrower, prop, heloc, cltv, grid_b)
+    gb_status = "fail" if gb_reasons else "ok"
+    if with_trace:
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "match_grid_b_llpas",
+                t0,
+                inputs={"cltv": cltv, "reused_across_rate_rows": True},
+                matched={"attributes": gb_attrs},
+                output={
+                    "reused_across_rate_rows": True,
+                    "attributes": gb_attrs,
+                    "llpa_total": gb_val if not gb_reasons else None,
+                    "reasons": gb_reasons,
+                },
+                status=gb_status,
+            )
+        )
+
+    t0 = time.perf_counter()
+    m_row, m_err = cache["margin"]
+    m_status = "fail" if m_err else "ok"
+    pts = margin_points(m_row, heloc) if m_row else None
+    if with_trace:
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "apply_margin",
+                t0,
+                inputs={"heloc_amount": heloc},
+                matched=(
+                    {
+                        "row": f"{m_row['loan_amount_min']}-{m_row['loan_amount_max'] or '+'}",
+                        "margin_dollar": m_row["margin_dollar"],
+                        "margin_percent": m_row["margin_percent"],
+                    }
+                    if m_row
+                    else None
+                ),
+                output={
+                    "formula": "margin_percent + (margin_dollar / heloc_amount) * 100",
+                    "margin_points": pts,
+                    "reason": m_err,
+                },
+                status=m_status,
+            )
+        )
+
+    t0 = time.perf_counter()
+    checks = [
+        {
+            "name": "grid_a_llpa",
+            "pass": not ga_reasons,
+            "reasons": ga_reasons,
+        },
+        {
+            "name": "grid_b_llpas",
+            "pass": not gb_reasons,
+            "reasons": gb_reasons,
+        },
+        {"name": "margin_band", "pass": not m_err, "reasons": [m_err] if m_err else []},
+    ]
+    if with_trace:
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "eligibility_checks",
+                t0,
+                inputs={"borrower_level": True},
+                matched=None,
+                output={"checks": checks},
+                status="fail" if any(not c["pass"] for c in checks) else "ok",
+            )
+        )
+
+    t0 = time.perf_counter()
+    results: list[dict] = []
+    for row in filtered:
         results.append(
-            price_one_rate_row(row, borrower, prop, heloc, cltv, grid_a, grid_b, margins)
+            price_one_rate_row(
+                row,
+                borrower,
+                prop,
+                heloc,
+                cltv,
+                grid_a,
+                grid_b,
+                margins,
+                borrower_cache=cache,
+            )
         )
     results.sort(
         key=lambda r: (
@@ -334,7 +652,31 @@ def run_pricing(
             -(r["final_price"] if r["final_price"] is not None else Decimal("-Infinity")),
         )
     )
-    return {
+    eligible_n = sum(1 for r in results if r["eligible"])
+    ineligible_n = len(results) - eligible_n
+    if with_trace:
+        trace[-1]["output"] = dict(trace[-1]["output"])
+        trace[-1]["output"]["eligible_count"] = eligible_n
+        trace[-1]["output"]["ineligible_count"] = ineligible_n
+        trace.append(
+            _trace_step(
+                step_n := step_n + 1,
+                "compute_final_price",
+                t0,
+                inputs={"rate_rows": len(results)},
+                matched=None,
+                output={
+                    "formula": "final_price = base_price + llpa_total - margin_points",
+                    "priced_rows": len(results),
+                    "eligible_count": eligible_n,
+                    "ineligible_count": ineligible_n,
+                    "borrower_level_grids_reused": True,
+                },
+                status="ok",
+            )
+        )
+
+    out: dict[str, Any] = {
         "inputs": {
             "loan": loan,
             "borrower": borrower,
@@ -343,3 +685,6 @@ def run_pricing(
         },
         "results": results,
     }
+    if with_trace:
+        out["trace"] = trace
+    return out

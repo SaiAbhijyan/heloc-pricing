@@ -8,7 +8,7 @@ EX = Path(__file__).resolve().parent.parent / "examples"
 
 def test_rate_sheet_ok():
     r = parsers.parse_rate_sheet((EX / "SYNTHETIC_rate_sheet.csv").read_bytes(), "f.csv")
-    assert r.ok and len(r.rows) >= 8
+    assert r.ok and len(r.rows) == 384
 
 
 def test_margins_missing_column():

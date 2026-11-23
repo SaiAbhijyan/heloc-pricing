@@ -48,26 +48,30 @@ PRODUCT_RATE_BUMP = {
 }
 
 
+LADDER_RUNGS = 6
+RATE_STEP = Decimal("0.125")
+PRICE_STEP = Decimal("0.4375")
+
+
 def rate_sheet_rows():
     rows = []
-    base = Decimal("7.5")
     for pi, p in enumerate(PRODUCTS):
         for ii, inv in enumerate(INVESTORS):
-            for li, lock in enumerate(LOCKS):
-                lock_hit = Decimal(li) * Decimal("-0.125")
-                br = (
-                    base
+            for lock in LOCKS:
+                lock_pen = (Decimal(lock) - Decimal("15")) / Decimal("320")
+                inv_off = Decimal(ii) * Decimal("0.12")
+                prod_off = Decimal(pi) * Decimal("0.08")
+                low_rate = (
+                    Decimal("7.25")
                     + PRODUCT_RATE_BUMP[p]
-                    + Decimal(ii) * Decimal("0.12")
-                    + Decimal(lock) / Decimal("800")
-                ).quantize(Decimal("0.001"))
-                bp = (
-                    Decimal("100")
-                    + Decimal(pi) * Decimal("0.35")
-                    - Decimal(lock) / Decimal("250")
-                    + lock_hit
-                ).quantize(Decimal("0.001"))
-                rows.append((p, inv, lock, br, bp))
+                    + Decimal(ii) * Decimal("0.08")
+                    + (Decimal(lock) - Decimal("15")) / Decimal("200")
+                )
+                low_price = Decimal("98.25") + inv_off - lock_pen + prod_off
+                for k in range(LADDER_RUNGS):
+                    br = (low_rate + k * RATE_STEP).quantize(Decimal("0.001"))
+                    bp = (low_price + k * PRICE_STEP).quantize(Decimal("0.001"))
+                    rows.append((p, inv, lock, br, bp))
     return rows
 
 
@@ -226,10 +230,16 @@ def main():
             "property": {"value": 650000, "occupancy": "primary", "property_type": "single_family"},
         },
         {
-            "name": "High CLTV (hits & NA)",
-            "loan": {"heloc_amount": 200000, "first_lien_balance": 520000},
+            "name": "High CLTV (NA cells)",
+            "loan": {"heloc_amount": 100000, "first_lien_balance": 335000},
+            "borrower": {"fico": 650, "dti": 38},
+            "property": {"value": 500000, "occupancy": "primary", "property_type": "single_family"},
+        },
+        {
+            "name": "CLTV above max band",
+            "loan": {"heloc_amount": 60000, "first_lien_balance": 400000},
             "borrower": {"fico": 720, "dti": 38},
-            "property": {"value": 700000, "occupancy": "primary", "property_type": "single_family"},
+            "property": {"value": 500000, "occupancy": "primary", "property_type": "single_family"},
         },
         {
             "name": "Low FICO (outside bands)",
@@ -239,15 +249,21 @@ def main():
         },
         {
             "name": "Investment condo",
-            "loan": {"heloc_amount": 120000, "first_lien_balance": 0},
+            "loan": {"heloc_amount": 80000, "first_lien_balance": 310000},
             "borrower": {"fico": 700, "dti": 42},
-            "property": {"value": 400000, "occupancy": "investment", "property_type": "condo"},
+            "property": {"value": 500000, "occupancy": "investment", "property_type": "condo"},
         },
         {
-            "name": "High DTI",
-            "loan": {"heloc_amount": 90000, "first_lien_balance": 220000},
-            "borrower": {"fico": 710, "dti": 48},
-            "property": {"value": 480000, "occupancy": "primary", "property_type": "pud"},
+            "name": "Investment condo low CLTV",
+            "loan": {"heloc_amount": 440000, "first_lien_balance": 0},
+            "borrower": {"fico": 700, "dti": 42},
+            "property": {"value": 800000, "occupancy": "investment", "property_type": "condo"},
+        },
+        {
+            "name": "High DTI (NA)",
+            "loan": {"heloc_amount": 130000, "first_lien_balance": 280000},
+            "borrower": {"fico": 710, "dti": 47},
+            "property": {"value": 500000, "occupancy": "primary", "property_type": "pud"},
         },
         {
             "name": "Jumbo line (500k+ band)",
@@ -260,12 +276,6 @@ def main():
             "loan": {"heloc_amount": 15000, "first_lien_balance": 100000},
             "borrower": {"fico": 740, "dti": 35},
             "property": {"value": 280000, "occupancy": "primary", "property_type": "single_family"},
-        },
-        {
-            "name": "Mixed CLTV column (low CLTV only)",
-            "loan": {"heloc_amount": 80000, "first_lien_balance": 200000},
-            "borrower": {"fico": 640, "dti": 36},
-            "property": {"value": 800000, "occupancy": "primary", "property_type": "single_family"},
         },
     ]
     (EX / "SYNTHETIC_scenarios.json").write_text(json.dumps({"scenarios": scenarios}, indent=2))

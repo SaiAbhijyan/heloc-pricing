@@ -22,3 +22,4 @@
 | A10 | Upload replaces whole table; keep uploaded_at and file name. | Version history needed? |
 | A11 | DTI percent; FICO 300–850; invalid request → 422. | Additional fields (state, lien position)? |
 | A12 | Results sorted by product, lock, then final_price descending among eligible. | Sort by rate instead for some channels? |
+| A13 | Best execution per product: lowest final rate among eligible rows with final price ≥ 100 (par); if none at/above par, highest final price. UI default shows one par-pick row per product×investor×lock (same rule); toggle shows full ladder. | Confirm par floor vs best-rate tie-break when multiple investors hit par. |

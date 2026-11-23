@@ -18,17 +18,33 @@
       }
     },
     {
-      "name": "High CLTV (hits & NA)",
+      "name": "High CLTV (NA cells)",
       "loan": {
-        "heloc_amount": 200000,
-        "first_lien_balance": 520000
+        "heloc_amount": 100000,
+        "first_lien_balance": 335000
+      },
+      "borrower": {
+        "fico": 650,
+        "dti": 38
+      },
+      "property": {
+        "value": 500000,
+        "occupancy": "primary",
+        "property_type": "single_family"
+      }
+    },
+    {
+      "name": "CLTV above max band",
+      "loan": {
+        "heloc_amount": 60000,
+        "first_lien_balance": 400000
       },
       "borrower": {
         "fico": 720,
         "dti": 38
       },
       "property": {
-        "value": 700000,
+        "value": 500000,
         "occupancy": "primary",
         "property_type": "single_family"
       }
@@ -52,7 +68,23 @@
     {
       "name": "Investment condo",
       "loan": {
-        "heloc_amount": 120000,
+        "heloc_amount": 80000,
+        "first_lien_balance": 310000
+      },
+      "borrower": {
+        "fico": 700,
+        "dti": 42
+      },
+      "property": {
+        "value": 500000,
+        "occupancy": "investment",
+        "property_type": "condo"
+      }
+    },
+    {
+      "name": "Investment condo low CLTV",
+      "loan": {
+        "heloc_amount": 440000,
         "first_lien_balance": 0
       },
       "borrower": {
@@ -60,23 +92,23 @@
         "dti": 42
       },
       "property": {
-        "value": 400000,
+        "value": 800000,
         "occupancy": "investment",
         "property_type": "condo"
       }
     },
     {
-      "name": "High DTI",
+      "name": "High DTI (NA)",
       "loan": {
-        "heloc_amount": 90000,
-        "first_lien_balance": 220000
+        "heloc_amount": 130000,
+        "first_lien_balance": 280000
       },
       "borrower": {
         "fico": 710,
-        "dti": 48
+        "dti": 47
       },
       "property": {
-        "value": 480000,
+        "value": 500000,
         "occupancy": "primary",
         "property_type": "pud"
       }
@@ -109,22 +141,6 @@
       },
       "property": {
         "value": 280000,
-        "occupancy": "primary",
-        "property_type": "single_family"
-      }
-    },
-    {
-      "name": "Mixed CLTV column (low CLTV only)",
-      "loan": {
-        "heloc_amount": 80000,
-        "first_lien_balance": 200000
-      },
-      "borrower": {
-        "fico": 640,
-        "dti": 36
-      },
-      "property": {
-        "value": 800000,
         "occupancy": "primary",
         "property_type": "single_family"
       }

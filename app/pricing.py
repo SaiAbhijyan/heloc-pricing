@@ -133,7 +133,7 @@ def _grid_b_no_row(attr: str, prop: dict, borrower: dict, heloc: Decimal) -> str
     if attr == "fico":
         return f"Grid B: FICO {borrower['fico']} is outside all FICO bands"
     if attr == "loan_amount":
-        return f"Grid B: loan amount {heloc} is outside all loan_amount bands"
+        return f"Grid B: loan amount ${heloc:,.0f} is outside all loan_amount bands"
     return f"Grid B: DTI {borrower['dti']} is outside all DTI bands"
 
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+PAR = Decimal("100")
+
 
 def _q(v: Decimal, dp: int) -> Decimal:
     return v.quantize(Decimal(10) ** -dp, rounding=ROUND_HALF_UP)
@@ -46,24 +48,56 @@ def _steps_for_result(r: dict[str, Any]) -> list[dict[str, Any]]:
         )
     if r.get("final_price") is not None:
         steps.append({"label": "Final price", "value": _num(r["final_price"], 3)})
+    steps.append({"label": "Final rate", "value": _num(r["final_rate"], 3)})
     return steps
+
+
+def pick_best_execution(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    eligible = [
+        r for r in rows if r.get("eligible") and r.get("final_price") is not None
+    ]
+    if not eligible:
+        return None
+    at_par = [r for r in eligible if r["final_price"] >= PAR]
+    if at_par:
+        return min(at_par, key=lambda r: (r["final_rate"], -r["final_price"]))
+    return max(eligible, key=lambda r: r["final_price"])
+
+
+def _best_row_ids(results: list[dict[str, Any]]) -> set[int]:
+    by_product: dict[str, list[dict[str, Any]]] = {}
+    for i, r in enumerate(results):
+        if r.get("eligible"):
+            by_product.setdefault(r["product_id"], []).append({**r, "_i": i})
+    winners: set[int] = set()
+    for pid, rows in by_product.items():
+        pick = pick_best_execution(rows)
+        if pick is not None:
+            winners.add(pick["_i"])
+    return winners
 
 
 def _summary(results: list[dict[str, Any]]) -> dict[str, Any]:
     eligible = [r for r in results if r.get("eligible")]
     ineligible = [r for r in results if not r.get("eligible")]
     best: dict[str, dict] = {}
+    by_product: dict[str, list[dict[str, Any]]] = {}
     for r in eligible:
-        pid = r["product_id"]
-        fp = r["final_price"]
-        if pid not in best or (fp and fp > best[pid]["final_price"]):
-            best[pid] = {
-                "product_id": pid,
-                "investor": r["investor"],
-                "lock_period_days": r["lock_period_days"],
-                "final_price": _num(fp, 3),
-                "final_rate": _num(r["final_rate"], 3),
-            }
+        by_product.setdefault(r["product_id"], []).append(r)
+    for pid, rows in by_product.items():
+        pick = pick_best_execution(rows)
+        if pick is None:
+            continue
+        fp = pick["final_price"]
+        best[pid] = {
+            "product_id": pid,
+            "investor": pick["investor"],
+            "lock_period_days": pick["lock_period_days"],
+            "rate": _num(pick["final_rate"], 3),
+            "final_rate": _num(pick["final_rate"], 3),
+            "price": _num(fp, 3),
+            "final_price": _num(fp, 3),
+        }
     return {
         "eligible_count": len(eligible),
         "ineligible_count": len(ineligible),
@@ -75,9 +109,11 @@ def _summary(results: list[dict[str, Any]]) -> dict[str, Any]:
 def format_result_payload(payload: dict) -> dict:
     results_in = payload.get("results", [])
     summary = _summary(results_in)
+    best_ids = _best_row_ids(results_in)
     out_results = []
-    for r in results_in:
+    for i, r in enumerate(results_in):
         row = _num(dict(r))
+        row["best"] = i in best_ids
         row["base_rate"] = _num(r["base_rate"], 3)
         row["base_price"] = _num(r["base_price"], 3)
         row["final_rate"] = _num(r["final_rate"], 3)

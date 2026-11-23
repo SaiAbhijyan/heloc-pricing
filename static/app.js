@@ -2,6 +2,7 @@ mountNav("/");
 
 const $ = (id) => document.getElementById(id);
 let lastData = null;
+const PAR = 100;
 
 function parseMoney(id) {
   const raw = $(id).value.replace(/,/g, "").trim();
@@ -36,7 +37,7 @@ async function loadProducts() {
     if (!res.ok) return;
     const data = await res.json();
     const sel = $("product_id");
-  (data.product_ids || []).forEach((pid) => {
+    (data.product_ids || []).forEach((pid) => {
       const o = document.createElement("option");
       o.value = pid;
       o.textContent = pid;
@@ -119,10 +120,46 @@ function passFilters(r) {
   return true;
 }
 
+function pickBestRow(rows) {
+  const eligible = rows.filter((r) => r.eligible && r.final_price != null);
+  if (!eligible.length) return null;
+  const atPar = eligible.filter((r) => r.final_price >= PAR);
+  if (atPar.length) {
+    return atPar.reduce((a, b) =>
+      b.final_rate < a.final_rate || (b.final_rate === a.final_rate && b.final_price > a.final_price)
+        ? b
+        : a
+    );
+  }
+  return eligible.reduce((a, b) => (b.final_price > a.final_price ? b : a));
+}
+
+function ladderKey(r) {
+  return `${r.product_id}\0${r.investor}\0${r.lock_period_days}`;
+}
+
+function parPicksOnly(rows) {
+  const groups = new Map();
+  rows.forEach((r) => {
+    const k = ladderKey(r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  });
+  const out = [];
+  groups.forEach((g) => {
+    const pick = pickBestRow(g);
+    if (pick) out.push(pick);
+  });
+  return out;
+}
+
 function renderSummaryBar(data) {
   const s = data.summary || {};
   const best = (s.best_by_product || [])
-    .map((b) => `${b.product_id}: ${fmtMoney(b.final_price)} pts @ ${b.final_rate}%`)
+    .map(
+      (b) =>
+        `${b.product_id}: ${fmtMoney(b.price ?? b.final_price)} pts @ ${b.rate ?? b.final_rate}%`
+    )
     .join(" · ");
   $("summaryBar").innerHTML = `<strong>${s.eligible_count ?? 0}</strong> eligible of <strong>${s.total_count ?? 0}</strong> priced. ${
     best ? `Best per product: ${best}` : ""
@@ -144,29 +181,47 @@ function fillFilterOptions(data) {
   locks.forEach((p) => fl.appendChild(new Option(String(p), String(p))));
 }
 
-function bestPriceByProduct(rows) {
-  const m = {};
-  rows.forEach((r) => {
-    if (!r.eligible) return;
-    if (!(r.product_id in m) || r.final_price > m[r.product_id]) {
-      m[r.product_id] = r.final_price;
-    }
-  });
-  return m;
-}
-
 function renderResults(data) {
   lastData = data;
   $("resultsPanel").classList.remove("hidden");
   renderSummaryBar(data);
   fillFilterOptions(data);
 
-  const eligible = data.results.filter((r) => r.eligible && passFilters(r));
-  const ineligible = data.results.filter((r) => !r.eligible && passFilters(r));
-  const best = bestPriceByProduct(data.results.filter((r) => r.eligible));
+  let eligible = data.results.filter((r) => r.eligible && passFilters(r));
+  const showAll = $("showFullLadder")?.checked;
+  if (!showAll) eligible = parPicksOnly(eligible);
+  eligible.sort((a, b) => {
+    if (a.product_id !== b.product_id) return a.product_id.localeCompare(b.product_id);
+    if (a.lock_period_days !== b.lock_period_days) return a.lock_period_days - b.lock_period_days;
+    if (a.investor !== b.investor) return a.investor.localeCompare(b.investor);
+    return (a.final_rate || 0) - (b.final_rate || 0);
+  });
 
-  $("summary").textContent = `${eligible.length} eligible (filtered)`;
+  const ineligible = data.results.filter((r) => !r.eligible && passFilters(r));
+
+  $("summary").textContent = `${eligible.length} eligible row(s) shown`;
   $("summary").classList.remove("hidden");
+
+  const colSpan = 9;
+  let tbody = "";
+  let lastProduct = null;
+  let rowIndex = 0;
+  const rowRefs = [];
+  eligible.forEach((r) => {
+    if (r.product_id !== lastProduct) {
+      lastProduct = r.product_id;
+      tbody += `<tr class="product-head"><td colspan="${colSpan}">${r.product_id}</td></tr>`;
+    }
+    const hi = r.best ? "row-best" : "";
+    const i = rowIndex++;
+    rowRefs.push(r);
+    tbody += `<tr class="eligible-row ${hi}" data-i="${i}" tabindex="0"><td>${r.product_id}</td><td>${r.investor}</td><td>${r.lock_period_days}d</td><td>${fmtMoney(
+      r.base_rate
+    )}%</td><td>${fmtMoney(r.base_price)}</td><td>${fmtMoney(r.llpa_total)}</td><td>${fmtMoney(
+      r.margin?.points
+    )}</td><td><strong>${fmtMoney(r.final_price)}</strong></td><td>${fmtMoney(r.final_rate)}%</td></tr>`;
+    tbody += `<tr class="ledger-row hidden" data-ledger="${i}"><td colspan="${colSpan}"><div class="ledger-panel"></div></td></tr>`;
+  });
 
   const eEl = $("eligible");
   eEl.classList.toggle("hidden", !eligible.length);
@@ -175,27 +230,24 @@ function renderResults(data) {
     '<div class="table-scroll"><table class="results-table"><thead><tr>' +
     "<th>Product</th><th>Investor</th><th>Lock</th><th>Base rate</th><th>Base price</th><th>LLPA total</th><th>Margin pts</th><th>Final price</th><th>Final rate</th>" +
     "</tr></thead><tbody>" +
-    eligible
-      .map((r, i) => {
-        const hi = best[r.product_id] === r.final_price ? "row-best" : "";
-        return `<tr class="eligible-row ${hi}" data-i="${i}" tabindex="0"><td>${r.product_id}</td><td>${r.investor}</td><td>${r.lock_period_days}d</td><td>${fmtMoney(
-          r.base_rate
-        )}%</td><td>${fmtMoney(r.base_price)}</td><td>${fmtMoney(r.llpa_total)}</td><td>${fmtMoney(
-          r.margin?.points
-        )}</td><td><strong>${fmtMoney(r.final_price)}</strong></td><td>${fmtMoney(r.final_rate)}%</td></tr>`;
-      })
-      .join("") +
-    "</tbody></table></div>" +
-    '<div id="eligibleDetail" class="ledger-panel hidden"></div>';
+    tbody +
+    "</tbody></table></div>";
 
   eEl.querySelectorAll(".eligible-row").forEach((tr) => {
     tr.addEventListener("click", () => {
-      const r = eligible[parseInt(tr.dataset.i, 10)];
-      const panel = $("eligibleDetail");
-      panel.classList.remove("hidden");
-      panel.innerHTML = `<h3>Price breakdown · ${r.product_id}</h3>${ledgerHtml(r.steps)}`;
+      const idx = parseInt(tr.dataset.i, 10);
+      const r = rowRefs[idx];
+      const ledgerTr = eEl.querySelector(`tr[data-ledger="${idx}"]`);
+      const panel = ledgerTr?.querySelector(".ledger-panel");
+      const open = ledgerTr && ledgerTr.classList.contains("hidden");
+      eEl.querySelectorAll(".ledger-row").forEach((x) => x.classList.add("hidden"));
       eEl.querySelectorAll(".eligible-row").forEach((x) => x.classList.remove("row-active"));
-      tr.classList.add("row-active");
+      if (open && panel && r) {
+        ledgerTr.classList.remove("hidden");
+        panel.innerHTML = `<h3>Price breakdown · ${r.product_id} · ${r.investor}</h3>${ledgerHtml(r.steps)}`;
+        tr.classList.add("row-active");
+        ledgerTr.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
     });
   });
 
@@ -203,7 +255,7 @@ function renderResults(data) {
   iEl.classList.toggle("hidden", !ineligible.length);
   iEl.innerHTML =
     "<h2>Ineligible</h2>" +
-    '<div class="table-scroll"><table class="results-table"><thead><tr><th>Product</th><th>Investor</th><th>Lock</th><th>Reasons</th></tr></thead><tbody>' +
+    '<div class="table-scroll clipped"><table class="results-table"><thead><tr><th>Product</th><th>Investor</th><th>Lock</th><th>Reasons</th></tr></thead><tbody>' +
     ineligible
       .map(
         (r) =>
@@ -217,8 +269,8 @@ function renderResults(data) {
     "</tbody></table></div>";
 }
 
-["filterProduct", "filterInvestor", "filterLock", "filterEligible"].forEach((id) =>
-  $(id)?.addEventListener("change", () => lastData && renderResults(lastData))
+["filterProduct", "filterInvestor", "filterLock", "filterEligible", "showFullLadder"].forEach(
+  (id) => $(id)?.addEventListener("change", () => lastData && renderResults(lastData))
 );
 
 $("runBtn").addEventListener("click", async () => {

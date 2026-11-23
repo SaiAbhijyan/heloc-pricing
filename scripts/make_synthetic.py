@@ -50,7 +50,7 @@ PRODUCT_RATE_BUMP = {
 
 LADDER_RUNGS = 6
 RATE_STEP = Decimal("0.125")
-PRICE_STEP = Decimal("0.4375")
+PRICE_STEP = Decimal("0.75")
 
 
 def rate_sheet_rows():
@@ -67,7 +67,7 @@ def rate_sheet_rows():
                     + Decimal(ii) * Decimal("0.08")
                     + (Decimal(lock) - Decimal("15")) / Decimal("200")
                 )
-                low_price = Decimal("98.25") + inv_off - lock_pen + prod_off
+                low_price = Decimal("98.50") + inv_off - lock_pen + prod_off
                 for k in range(LADDER_RUNGS):
                     br = (low_rate + k * RATE_STEP).quantize(Decimal("0.001"))
                     bp = (low_price + k * PRICE_STEP).quantize(Decimal("0.001"))

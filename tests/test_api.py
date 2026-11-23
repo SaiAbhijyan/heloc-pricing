@@ -125,6 +125,28 @@ def test_synthetic_rate_ladder_row_count(client):
         rates = sorted(x["base_rate"] for x in g)
         for i in range(1, len(rates)):
             assert abs(rates[i] - rates[i - 1] - 0.125) < 0.0001
+        prices = sorted(x["base_price"] for x in g)
+        for i in range(1, len(prices)):
+            assert abs(prices[i] - prices[i - 1] - 0.75) < 0.0001
+
+
+def test_clean_borrower_par_by_product(client):
+    body = _post_scenario(client, "Clean eligible (primary SF)").json()
+    assert body["summary"]["best_by_product"]
+    for b in body["summary"]["best_by_product"]:
+        assert b["final_price"] >= 100, b
+
+
+def test_upload_preview_summary(client):
+    data = (EX / "SYNTHETIC_rate_sheet.csv").read_bytes()
+    r = client.post(
+        "/api/admin/rate-sheet?preview=true",
+        files={"file": ("rs.csv", data, "text/csv")},
+    )
+    body = r.json()
+    assert r.status_code == 200 and body["ok"]
+    assert body["summary"]["row_count"] == 384
+    assert len(body["rows"]) <= 20
 
 
 def test_best_execution_rule(client):

@@ -181,6 +181,37 @@ function fillFilterOptions(data) {
   locks.forEach((p) => fl.appendChild(new Option(String(p), String(p))));
 }
 
+function reasonGroupKey(reasons) {
+  return (reasons || []).slice().sort().join("\0");
+}
+
+function renderIneligibleGroups(ineligible) {
+  const groups = new Map();
+  ineligible.forEach((r) => {
+    const k = reasonGroupKey(r.reasons);
+    if (!groups.has(k)) groups.set(k, { reasons: r.reasons || [], rows: [] });
+    groups.get(k).rows.push(r);
+  });
+  const sorted = [...groups.values()].sort((a, b) => b.rows.length - a.rows.length);
+  return sorted
+    .map((g, gi) => {
+      const rowsHtml = g.rows
+        .map(
+          (r) =>
+            `<li>${r.product_id} · ${r.investor} · ${r.lock_period_days}d lock</li>`
+        )
+        .join("");
+      return `<details class="inelig-group" data-gi="${gi}">
+        <summary>
+          <ul class="reason-list reason-inline">${g.reasons.map((x) => `<li>${x}</li>`).join("")}</ul>
+          <span class="inelig-count">applies to ${g.rows.length} row${g.rows.length === 1 ? "" : "s"}</span>
+        </summary>
+        <ul class="inelig-rows">${rowsHtml}</ul>
+      </details>`;
+    })
+    .join("");
+}
+
 function renderResults(data) {
   lastData = data;
   $("resultsPanel").classList.remove("hidden");
@@ -207,6 +238,9 @@ function renderResults(data) {
   let lastProduct = null;
   let rowIndex = 0;
   const rowRefs = [];
+  const openState = new Set(
+    [...document.querySelectorAll("tr.ledger-row:not(.hidden)")].map((tr) => tr.dataset.ledger)
+  );
   eligible.forEach((r) => {
     if (r.product_id !== lastProduct) {
       lastProduct = r.product_id;
@@ -215,12 +249,15 @@ function renderResults(data) {
     const hi = r.best ? "row-best" : "";
     const i = rowIndex++;
     rowRefs.push(r);
-    tbody += `<tr class="eligible-row ${hi}" data-i="${i}" tabindex="0"><td>${r.product_id}</td><td>${r.investor}</td><td>${r.lock_period_days}d</td><td>${fmtMoney(
+    const open = openState.has(String(i));
+    tbody += `<tr class="eligible-row ${hi}" data-testid="result-row" data-i="${i}" tabindex="0"><td><span class="details-affordance" aria-hidden="true">▸</span> ${r.product_id}</td><td>${r.investor}</td><td>${r.lock_period_days}d</td><td>${fmtMoney(
       r.base_rate
     )}%</td><td>${fmtMoney(r.base_price)}</td><td>${fmtMoney(r.llpa_total)}</td><td>${fmtMoney(
       r.margin?.points
     )}</td><td><strong>${fmtMoney(r.final_price)}</strong></td><td>${fmtMoney(r.final_rate)}%</td></tr>`;
-    tbody += `<tr class="ledger-row hidden" data-ledger="${i}"><td colspan="${colSpan}"><div class="ledger-panel"></div></td></tr>`;
+    tbody += `<tr class="ledger-row ${open ? "" : "hidden"}" data-testid="breakdown" data-ledger="${i}"><td colspan="${colSpan}"><div class="ledger-panel">${
+      open ? `<h3>Price breakdown · ${r.product_id} · ${r.investor}</h3>${ledgerHtml(r.steps)}` : ""
+    }</div></td></tr>`;
   });
 
   const eEl = $("eligible");
@@ -234,19 +271,32 @@ function renderResults(data) {
     "</tbody></table></div>";
 
   eEl.querySelectorAll(".eligible-row").forEach((tr) => {
-    tr.addEventListener("click", () => {
+    const toggleRow = () => {
       const idx = parseInt(tr.dataset.i, 10);
       const r = rowRefs[idx];
       const ledgerTr = eEl.querySelector(`tr[data-ledger="${idx}"]`);
       const panel = ledgerTr?.querySelector(".ledger-panel");
-      const open = ledgerTr && ledgerTr.classList.contains("hidden");
+      const afford = tr.querySelector(".details-affordance");
+      const wasOpen = ledgerTr && !ledgerTr.classList.contains("hidden");
       eEl.querySelectorAll(".ledger-row").forEach((x) => x.classList.add("hidden"));
-      eEl.querySelectorAll(".eligible-row").forEach((x) => x.classList.remove("row-active"));
-      if (open && panel && r) {
+      eEl.querySelectorAll(".eligible-row").forEach((x) => {
+        x.classList.remove("row-active");
+        x.querySelector(".details-affordance")?.classList.remove("open");
+      });
+      if (wasOpen) return;
+      if (ledgerTr && panel && r) {
         ledgerTr.classList.remove("hidden");
         panel.innerHTML = `<h3>Price breakdown · ${r.product_id} · ${r.investor}</h3>${ledgerHtml(r.steps)}`;
         tr.classList.add("row-active");
+        afford?.classList.add("open");
         ledgerTr.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    };
+    tr.addEventListener("click", toggleRow);
+    tr.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        toggleRow();
       }
     });
   });
@@ -255,18 +305,7 @@ function renderResults(data) {
   iEl.classList.toggle("hidden", !ineligible.length);
   iEl.innerHTML =
     "<h2>Ineligible</h2>" +
-    '<div class="table-scroll clipped"><table class="results-table"><thead><tr><th>Product</th><th>Investor</th><th>Lock</th><th>Reasons</th></tr></thead><tbody>' +
-    ineligible
-      .map(
-        (r) =>
-          `<tr><td>${r.product_id}</td><td>${r.investor}</td><td>${r.lock_period_days}d</td><td><ul class="reason-list">${(
-            r.reasons || []
-          )
-            .map((x) => `<li>${x}</li>`)
-            .join("")}</ul></td></tr>`
-      )
-      .join("") +
-    "</tbody></table></div>";
+    `<div class="inelig-groups">${renderIneligibleGroups(ineligible)}</div>`;
 }
 
 ["filterProduct", "filterInvestor", "filterLock", "filterEligible", "showFullLadder"].forEach(

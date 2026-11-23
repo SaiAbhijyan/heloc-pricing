@@ -121,23 +121,18 @@ async function previewGrid(component, file, errId, previewId, onCommit) {
   const el = document.getElementById(errId);
   const prev = document.getElementById(previewId);
   if (!data.ok) {
-    el.textContent = (data.errors || []).join("; ");
+    el.textContent = (data.errors || [data.detail]).join("; ");
     el.classList.remove("hidden");
     prev.classList.add("hidden");
     return;
   }
   el.classList.add("hidden");
   prev.classList.remove("hidden");
-  const n = data.rows?.rows?.length ?? (Array.isArray(data.rows) ? data.rows.length : 0);
-  prev.innerHTML = `<p class="ok">${n} rows parsed. <button type="button" class="secondary" id="commit${component}">Save</button> <button type="button" class="ghost" id="cancel${component}">Cancel</button></p>`;
-  document.getElementById(`commit${component}`).onclick = async () => {
-    const fd2 = new FormData();
-    fd2.append("file", file);
-    await fetch(`/api/admin/${component}`, { method: "POST", body: fd2 });
+  pending(file);
+  renderUploadPreview(prev, data, component, () => {
     prev.classList.add("hidden");
     onCommit();
-  };
-  document.getElementById(`cancel${component}`).onclick = () => prev.classList.add("hidden");
+  });
 }
 
 document.getElementById("fileInputA").addEventListener("change", (e) => {

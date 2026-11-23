@@ -17,14 +17,23 @@
       <div id="previewBox"></div>
       <p id="uploadErr" class="err hidden"></p>
       <div class="row">
-        <button type="button" id="saveUpload" class="secondary">Save upload</button>
         <a href="/api/admin/rate-sheet/download" class="ghost" style="padding:0.55rem 0.9rem">Download CSV</a>
         <button type="button" id="saveEdit">Save table edits</button>
         <button type="button" id="addRow" class="ghost">Add row</button>
       </div>
     </div>
-    <div class="card" style="overflow:auto">
-      <table id="tbl"><thead></thead><tbody></tbody></table>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:0.5rem">
+        <label class="inline chk">Search <input type="search" id="tableSearch" placeholder="product, investor…" style="max-width:14rem" /></label>
+        <span id="pageInfo" class="muted"></span>
+      </div>
+      <div class="table-scroll">
+        <table id="tbl"><thead></thead><tbody></tbody></table>
+      </div>
+      <div class="row" style="margin-top:0.5rem">
+        <button type="button" id="pagePrev" class="ghost">← Prev</button>
+        <button type="button" id="pageNext" class="ghost">Next →</button>
+      </div>
     </div>
   </main>
   <script src="/static/nav.js"></script>

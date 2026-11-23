@@ -34,17 +34,7 @@ async function load() {
   renderTable(rows);
 }
 
-wireUpload(
-  "margins",
-  (data, file) => {
-    pending(file);
-    rows = (data.rows || []).map((r) =>
-      Object.fromEntries(COLS.map((c) => [c, String(r[c] ?? "")]))
-    );
-    renderTable(rows);
-  },
-  () => load()
-);
+wireUpload("margins", null, () => load());
 
 document.getElementById("addRow").addEventListener("click", () => {
   rows.push(Object.fromEntries(COLS.map((c) => [c, ""])));

@@ -175,20 +175,64 @@ async def admin_upload(
             status_code=400, content={"ok": False, "errors": result.errors}
         )
     if preview:
-        return {"ok": True, "rows": _preview_rows(key, result.rows), "errors": []}
+        return _preview_payload(key, result)
     SAVERS[key](result.rows, file.filename or "upload")
     return {"ok": True, "meta": store.get_meta(key)}
 
 
 def _preview_rows(key: str, rows):
     if key in ("grid-a", "grid-b"):
-        return rows
+        if isinstance(rows, dict):
+            slim = dict(rows)
+            body = slim.get("rows") or []
+            slim["rows"] = body[:20]
+            return slim
+        flat = rows if isinstance(rows, list) else [rows]
+        return flat[:20]
+    flat = rows if isinstance(rows, list) else [rows]
     return [
         {k: (str(v) if isinstance(v, Decimal) else v) for k, v in r.items()}
         if isinstance(r, dict)
         else r
-        for r in (rows if isinstance(rows, list) else [rows])
+        for r in flat[:20]
     ]
+
+
+def _preview_summary(key: str, rows) -> dict:
+    if key == "rate-sheet":
+        flat = rows if isinstance(rows, list) else []
+        rates = [r["base_rate"] for r in flat if isinstance(r, dict) and "base_rate" in r]
+        prices = [r["base_price"] for r in flat if isinstance(r, dict) and "base_price" in r]
+        return {
+            "row_count": len(flat),
+            "products": sorted({r["product_id"] for r in flat if "product_id" in r}),
+            "investors": sorted({r["investor"] for r in flat if "investor" in r}),
+            "locks": sorted({int(r["lock_period_days"]) for r in flat if "lock_period_days" in r}),
+            "rate_min": float(min(rates)) if rates else None,
+            "rate_max": float(max(rates)) if rates else None,
+            "price_min": float(min(prices)) if prices else None,
+            "price_max": float(max(prices)) if prices else None,
+        }
+    if key == "margins":
+        flat = rows if isinstance(rows, list) else []
+        return {"row_count": len(flat)}
+    if key in ("grid-a", "grid-b"):
+        data = rows if isinstance(rows, dict) else {}
+        body_rows = data.get("rows") if isinstance(data, dict) else (rows if isinstance(rows, list) else [])
+        labels = data.get("cltv_labels") if isinstance(data, dict) else []
+        n = len(body_rows) if isinstance(body_rows, list) else 0
+        return {"row_count": n, "cltv_columns": len(labels)}
+    return {"row_count": len(rows) if isinstance(rows, list) else 0}
+
+
+def _preview_payload(key: str, result: parsers.ParseResult) -> dict:
+    return {
+        "ok": True,
+        "rows": _preview_rows(key, result.rows),
+        "summary": _preview_summary(key, result.rows),
+        "total_rows": _preview_summary(key, result.rows).get("row_count", 0),
+        "errors": result.errors or [],
+    }
 
 
 class RateSheetBody(BaseModel):

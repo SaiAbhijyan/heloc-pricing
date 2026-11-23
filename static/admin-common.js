@@ -12,6 +12,96 @@ async function uploadFile(component, file, preview) {
   return fetch(url, { method: "POST", body: fd });
 }
 
+function previewSummaryHtml(summary, component) {
+  if (!summary) return "";
+  if (component === "rate-sheet") {
+    const parts = [
+      `<strong>${summary.row_count ?? "—"}</strong> rows`,
+      summary.products?.length ? `${summary.products.length} products` : "",
+      summary.investors?.length ? `${summary.investors.length} investors` : "",
+      summary.locks?.length ? `locks ${summary.locks.join(", ")}d` : "",
+    ].filter(Boolean);
+    const ranges = [];
+    if (summary.rate_min != null)
+      ranges.push(`rates ${summary.rate_min}–${summary.rate_max}%`);
+    if (summary.price_min != null)
+      ranges.push(`prices ${summary.price_min}–${summary.price_max}`);
+    return `<p class="preview-summary">${parts.join(" · ")}${ranges.length ? `<br/>${ranges.join(" · ")}` : ""}</p>`;
+  }
+  if (component === "margins") {
+    return `<p class="preview-summary"><strong>${summary.row_count ?? "—"}</strong> margin band(s)</p>`;
+  }
+  return `<p class="preview-summary"><strong>${summary.row_count ?? "—"}</strong> rows · ${summary.cltv_columns ?? "?"} CLTV columns</p>`;
+}
+
+function previewSampleTable(rows, component) {
+  const flat = Array.isArray(rows)
+    ? rows
+    : rows?.rows && Array.isArray(rows.rows)
+      ? rows.rows
+      : [];
+  if (!flat.length) return "";
+  if (component === "rate-sheet") {
+    const cols = ["product_id", "investor", "lock_period_days", "base_rate", "base_price"];
+    let html =
+      '<div class="table-scroll"><table class="results-table preview-sample"><thead><tr>' +
+      cols.map((c) => `<th>${c}</th>`).join("") +
+      "</tr></thead><tbody>";
+    flat.forEach((r) => {
+      html += "<tr>" + cols.map((c) => `<td>${r[c] ?? ""}</td>`).join("") + "</tr>";
+    });
+    return html + "</tbody></table></div>";
+  }
+  if (component === "margins") {
+    const cols = ["loan_amount_min", "loan_amount_max", "margin_dollar", "margin_percent"];
+    let html =
+      '<div class="table-scroll"><table class="results-table preview-sample"><thead><tr>' +
+      cols.map((c) => `<th>${c}</th>`).join("") +
+      "</tr></thead><tbody>";
+    flat.forEach((r) => {
+      html += "<tr>" + cols.map((c) => `<td>${r[c] ?? ""}</td>`).join("") + "</tr>";
+    });
+    return html + "</tbody></table></div>";
+  }
+  return `<pre class="preview-sample-json">${JSON.stringify(rows, null, 2).slice(0, 4000)}</pre>`;
+}
+
+function renderUploadPreview(previewEl, data, component, onSaved) {
+  const errs = data.errors || [];
+  let html = previewSummaryHtml(data.summary, component);
+  if (errs.length) {
+    html += `<ul class="preview-errors">${errs.map((e) => `<li>${e}</li>`).join("")}</ul>`;
+  }
+  html += '<p class="muted">First parsed rows (max 20):</p>';
+  html += previewSampleTable(data.rows, component);
+  html +=
+    '<motion-remove/><div class="row" style="margin-top:0.75rem">' +
+    '<button type="button" id="saveUpload" class="secondary">Save upload</button>' +
+    '<button type="button" id="cancelUpload" class="ghost">Cancel</button></div>';
+  previewEl.innerHTML = html.replace("<motion-remove/>", "");
+  previewEl.querySelector("#cancelUpload")?.addEventListener("click", () => {
+    window.__pendingUpload = null;
+    previewEl.innerHTML = "";
+  });
+  previewEl.querySelector("#saveUpload")?.addEventListener("click", async () => {
+    const up = window.__pendingUpload;
+    if (!up) return;
+    const res = await uploadFile(component, up.file, false);
+    const saved = await res.json();
+    if (!saved.ok) {
+      const errEl = document.getElementById("uploadErr");
+      if (errEl) {
+        errEl.textContent = JSON.stringify(saved);
+        errEl.classList.remove("hidden");
+      }
+      return;
+    }
+    window.__pendingUpload = null;
+    previewEl.innerHTML = "";
+    onSaved?.(saved);
+  });
+}
+
 function wireUpload(component, onPreview, onSaved) {
   const input = document.getElementById("fileInput");
   const zone = document.getElementById("dropZone");
@@ -28,8 +118,9 @@ function wireUpload(component, onPreview, onSaved) {
       errEl.classList.remove("hidden");
       return;
     }
-    previewEl.innerHTML = `<p class="ok">Parsed ${(data.rows?.length ?? data.rows?.rows?.length ?? "?")} row(s). Review then Save.</p>`;
-    onPreview(data, file);
+    pending(file);
+    renderUploadPreview(previewEl, data, component, onSaved);
+    onPreview?.(data, file);
   }
 
   input.addEventListener("change", () => {
@@ -44,21 +135,6 @@ function wireUpload(component, onPreview, onSaved) {
     e.preventDefault();
     zone.classList.remove("drag");
     if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]);
-  });
-
-  document.getElementById("saveUpload").addEventListener("click", async () => {
-    const pending = window.__pendingUpload;
-    if (!pending) return;
-    const r = await uploadFile(component, pending.file, false);
-    const data = await r.json();
-    if (!data.ok) {
-      errEl.textContent = JSON.stringify(data);
-      errEl.classList.remove("hidden");
-      return;
-    }
-    window.__pendingUpload = null;
-    previewEl.innerHTML = "";
-    onSaved(data);
   });
 }
 

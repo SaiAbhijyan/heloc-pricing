@@ -1,39 +1,102 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 
-def _d(v: Any, dp: int | None = None) -> Any:
+def _q(v: Decimal, dp: int) -> Decimal:
+    return v.quantize(Decimal(10) ** -dp, rounding=ROUND_HALF_UP)
+
+
+def _num(v: Any, dp: int | None = None) -> Any:
     if isinstance(v, Decimal):
         if dp is None:
             return float(v)
-        q = Decimal(10) ** -dp
-        return float(v.quantize(q))
+        return float(_q(v, dp))
     if isinstance(v, dict):
-        return {k: _d(x, dp) for k, x in v.items()}
+        return {k: _num(x, dp) for k, x in v.items()}
     if isinstance(v, list):
-        return [_d(x, dp) for x in v]
+        return [_num(x, dp) for x in v]
     return v
 
 
+def _steps_for_result(r: dict[str, Any]) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = [
+        {"label": "Base price", "value": _num(r["base_price"], 3)},
+    ]
+    for ll in r.get("llpas") or []:
+        src = "Grid A" if ll["source"] == "grid_a" else "Grid B"
+        steps.append(
+            {
+                "label": f"{src} {ll['row']} x CLTV {ll['column']}",
+                "value": _num(ll["value"], 3),
+            }
+        )
+    steps.append({"label": "LLPA total", "value": _num(r["llpa_total"], 3)})
+    if r.get("margin"):
+        m = r["margin"]
+        steps.append(
+            {
+                "label": (
+                    f"Margin ${float(_q(m['dollar'], 2)):.2f} + {float(_q(m['percent'], 3))}% "
+                    f"= {float(_q(m['points'], 3))} pts (row {m['row']})"
+                ),
+                "value": _num(-m["points"], 3),
+            }
+        )
+    if r.get("final_price") is not None:
+        steps.append({"label": "Final price", "value": _num(r["final_price"], 3)})
+    return steps
+
+
+def _summary(results: list[dict[str, Any]]) -> dict[str, Any]:
+    eligible = [r for r in results if r.get("eligible")]
+    ineligible = [r for r in results if not r.get("eligible")]
+    best: dict[str, dict] = {}
+    for r in eligible:
+        pid = r["product_id"]
+        fp = r["final_price"]
+        if pid not in best or (fp and fp > best[pid]["final_price"]):
+            best[pid] = {
+                "product_id": pid,
+                "investor": r["investor"],
+                "lock_period_days": r["lock_period_days"],
+                "final_price": _num(fp, 3),
+                "final_rate": _num(r["final_rate"], 3),
+            }
+    return {
+        "eligible_count": len(eligible),
+        "ineligible_count": len(ineligible),
+        "total_count": len(results),
+        "best_by_product": sorted(best.values(), key=lambda x: x["product_id"]),
+    }
+
+
 def format_result_payload(payload: dict) -> dict:
-    out = _d(payload)
-    if "results" in out:
-        for r in out["results"]:
-            if r.get("final_price") is not None:
-                r["final_price"] = _d(r["final_price"], 3)
-            r["base_rate"] = _d(r["base_rate"], 3)
-            r["base_price"] = _d(r["base_price"], 3)
-            r["final_rate"] = _d(r["final_rate"], 3)
-            r["llpa_total"] = _d(r["llpa_total"], 3)
-            for ll in r.get("llpas", []):
-                ll["value"] = _d(ll["value"], 3)
-            if r.get("margin"):
-                m = r["margin"]
-                m["dollar"] = _d(m["dollar"], 2)
-                m["percent"] = _d(m["percent"], 3)
-                m["points"] = _d(m["points"], 3)
+    results_in = payload.get("results", [])
+    summary = _summary(results_in)
+    out_results = []
+    for r in results_in:
+        row = _num(dict(r))
+        row["base_rate"] = _num(r["base_rate"], 3)
+        row["base_price"] = _num(r["base_price"], 3)
+        row["final_rate"] = _num(r["final_rate"], 3)
+        row["llpa_total"] = _num(r["llpa_total"], 3)
+        if r.get("final_price") is not None:
+            row["final_price"] = _num(r["final_price"], 3)
+        for ll in row.get("llpas", []):
+            ll["value"] = _num(Decimal(str(ll["value"])), 3)
+        if r.get("margin"):
+            m = row["margin"]
+            m["dollar"] = _num(r["margin"]["dollar"], 2)
+            m["percent"] = _num(r["margin"]["percent"], 3)
+            m["points"] = _num(r["margin"]["points"], 3)
+        row["steps"] = _steps_for_result(r) if r.get("eligible") else []
+        out_results.append(row)
+    out = dict(payload)
+    out["results"] = out_results
+    out["summary"] = summary
     if "inputs" in out and "cltv" in out["inputs"]:
-        out["inputs"]["cltv"] = _d(out["inputs"]["cltv"], 2)
-    return out
+        out["inputs"] = dict(out["inputs"])
+        out["inputs"]["cltv"] = _num(out["inputs"]["cltv"], 2)
+    return _num(out)

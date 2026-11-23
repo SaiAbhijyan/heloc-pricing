@@ -1,11 +1,22 @@
 mountNav("/");
 
 const $ = (id) => document.getElementById(id);
+let lastData = null;
+
+function parseMoney(id) {
+  const raw = $(id).value.replace(/,/g, "").trim();
+  return parseFloat(raw) || 0;
+}
+
+function fmtMoney(n) {
+  if (n == null || Number.isNaN(n)) return "—";
+  return Number(n).toLocaleString("en-US", { maximumFractionDigits: 3 });
+}
 
 function updateCltv() {
-  const heloc = parseFloat($("heloc_amount").value) || 0;
-  const lien = parseFloat($("first_lien_balance").value) || 0;
-  const val = parseFloat($("value").value) || 0;
+  const heloc = parseMoney("heloc_amount");
+  const lien = parseMoney("first_lien_balance");
+  const val = parseMoney("value");
   const el = $("cltvLive");
   if (val <= 0) {
     el.textContent = "—";
@@ -19,81 +30,196 @@ function updateCltv() {
 );
 updateCltv();
 
+async function loadProducts() {
+  try {
+    const res = await fetch("/api/products");
+    if (!res.ok) return;
+    const data = await res.json();
+    const sel = $("product_id");
+  (data.product_ids || []).forEach((pid) => {
+      const o = document.createElement("option");
+      o.value = pid;
+      o.textContent = pid;
+      sel.appendChild(o);
+    });
+  } catch {
+    /* empty db on first paint */
+  }
+}
+loadProducts();
+
 function buildPayload() {
   const loan = {
-    heloc_amount: parseFloat($("heloc_amount").value),
-    first_lien_balance: parseFloat($("first_lien_balance").value),
+    heloc_amount: parseMoney("heloc_amount"),
+    first_lien_balance: parseMoney("first_lien_balance"),
   };
-  const lock = $("lock_period_days").value.trim();
+  const lock = $("lock_period_days").value;
   if (lock) loan.lock_period_days = parseInt(lock, 10);
-  const pid = $("product_id").value.trim();
+  const pid = $("product_id").value;
   if (pid) loan.product_id = pid;
   return {
     loan,
     borrower: { fico: parseInt($("fico").value, 10), dti: parseFloat($("dti").value) },
     property: {
-      value: parseFloat($("value").value),
+      value: parseMoney("value"),
       occupancy: $("occupancy").value,
-      property_type: $("property_type").value.trim(),
+      property_type: $("property_type").value,
     },
   };
 }
 
 function clientValidate(body) {
-  if (!(body.loan.heloc_amount > 0)) return "HELOC amount must be greater than 0.";
-  if (body.loan.first_lien_balance < 0) return "First lien balance cannot be negative.";
-  if (!(body.property.value > 0)) return "Property value must be greater than 0.";
-  if (body.borrower.fico < 300 || body.borrower.fico > 850) return "FICO must be 300–850.";
-  if (body.borrower.dti < 0 || body.borrower.dti > 100) return "DTI must be 0–100.";
-  return "";
+  let ok = true;
+  const show = (id, msg) => {
+    const el = $(id);
+    if (msg) {
+      el.textContent = msg;
+      el.classList.remove("hidden");
+      ok = false;
+    } else el.classList.add("hidden");
+  };
+  show("err_heloc", body.loan.heloc_amount > 0 ? "" : "Must be greater than 0.");
+  show("err_lien", body.loan.first_lien_balance >= 0 ? "" : "Cannot be negative.");
+  show("err_value", body.property.value > 0 ? "" : "Must be greater than 0.");
+  show(
+    "err_fico",
+    body.borrower.fico >= 300 && body.borrower.fico <= 850 ? "" : "FICO must be 300–850."
+  );
+  show(
+    "err_dti",
+    body.borrower.dti >= 0 && body.borrower.dti <= 100 ? "" : "DTI must be 0–100."
+  );
+  return ok ? "" : "Fix the fields above.";
 }
 
-function breakdown(r) {
-  let s = `base price ${r.base_price}\n`;
-  for (const ll of r.llpas || []) {
-    s += `  + LLPA ${ll.source} | ${ll.row} | ${ll.column}: ${ll.value}\n`;
-  }
-  s += `  = LLPA total ${r.llpa_total}\n`;
-  if (r.margin) {
-    const m = r.margin;
-    s += `  − margin ($${m.dollar}, ${m.percent}%, ${m.points} pts, row ${m.row})\n`;
-  }
-  s += `  = final price ${r.final_price} | final rate ${r.final_rate}`;
-  return s;
+function ledgerHtml(steps) {
+  if (!steps?.length) return "";
+  return (
+    '<ul class="ledger">' +
+    steps
+      .map((s) => {
+        const v = s.value != null ? fmtMoney(s.value) : "";
+        const cls = Number(s.value) < 0 ? "ledger-neg" : "";
+        return `<li class="${cls}"><span class="ledger-label">${s.label}</span><span class="ledger-val">${v}</span></li>`;
+      })
+      .join("") +
+    "</ul>"
+  );
+}
+
+function passFilters(r) {
+  const fp = $("filterProduct").value;
+  const fi = $("filterInvestor").value;
+  const fl = $("filterLock").value;
+  const fe = $("filterEligible").checked;
+  if (fp && r.product_id !== fp) return false;
+  if (fi && r.investor !== fi) return false;
+  if (fl && String(r.lock_period_days) !== fl) return false;
+  if (fe && !r.eligible) return false;
+  return true;
+}
+
+function renderSummaryBar(data) {
+  const s = data.summary || {};
+  const best = (s.best_by_product || [])
+    .map((b) => `${b.product_id}: ${fmtMoney(b.final_price)} pts @ ${b.final_rate}%`)
+    .join(" · ");
+  $("summaryBar").innerHTML = `<strong>${s.eligible_count ?? 0}</strong> eligible of <strong>${s.total_count ?? 0}</strong> priced. ${
+    best ? `Best per product: ${best}` : ""
+  }`;
+}
+
+function fillFilterOptions(data) {
+  const products = [...new Set(data.results.map((r) => r.product_id))].sort();
+  const investors = [...new Set(data.results.map((r) => r.investor))].sort();
+  const locks = [...new Set(data.results.map((r) => r.lock_period_days))].sort((a, b) => a - b);
+  const fp = $("filterProduct");
+  const fi = $("filterInvestor");
+  const fl = $("filterLock");
+  [fp, fi, fl].forEach((el) => {
+    while (el.options.length > 1) el.remove(1);
+  });
+  products.forEach((p) => fp.appendChild(new Option(p, p)));
+  investors.forEach((p) => fi.appendChild(new Option(p, p)));
+  locks.forEach((p) => fl.appendChild(new Option(String(p), String(p))));
+}
+
+function bestPriceByProduct(rows) {
+  const m = {};
+  rows.forEach((r) => {
+    if (!r.eligible) return;
+    if (!(r.product_id in m) || r.final_price > m[r.product_id]) {
+      m[r.product_id] = r.final_price;
+    }
+  });
+  return m;
 }
 
 function renderResults(data) {
-  const eligible = (data.results || []).filter((r) => r.eligible);
-  const ineligible = (data.results || []).filter((r) => !r.eligible);
-  $("summary").textContent = `${eligible.length} eligible of ${data.results.length} priced`;
+  lastData = data;
+  $("resultsPanel").classList.remove("hidden");
+  renderSummaryBar(data);
+  fillFilterOptions(data);
+
+  const eligible = data.results.filter((r) => r.eligible && passFilters(r));
+  const ineligible = data.results.filter((r) => !r.eligible && passFilters(r));
+  const best = bestPriceByProduct(data.results.filter((r) => r.eligible));
+
+  $("summary").textContent = `${eligible.length} eligible (filtered)`;
   $("summary").classList.remove("hidden");
 
   const eEl = $("eligible");
   eEl.classList.toggle("hidden", !eligible.length);
   eEl.innerHTML =
     "<h2>Eligible</h2>" +
+    '<div class="table-scroll"><table class="results-table"><thead><tr>' +
+    "<th>Product</th><th>Investor</th><th>Lock</th><th>Base rate</th><th>Base price</th><th>LLPA total</th><th>Margin pts</th><th>Final price</th><th>Final rate</th>" +
+    "</tr></thead><tbody>" +
     eligible
-      .map(
-        (r) => `<div class="card">
-          <strong>${r.product_id}</strong> · ${r.investor} · lock ${r.lock_period_days}d
-          <pre class="breakdown">${breakdown(r)}</pre>
-        </div>`
-      )
-      .join("");
+      .map((r, i) => {
+        const hi = best[r.product_id] === r.final_price ? "row-best" : "";
+        return `<tr class="eligible-row ${hi}" data-i="${i}" tabindex="0"><td>${r.product_id}</td><td>${r.investor}</td><td>${r.lock_period_days}d</td><td>${fmtMoney(
+          r.base_rate
+        )}%</td><td>${fmtMoney(r.base_price)}</td><td>${fmtMoney(r.llpa_total)}</td><td>${fmtMoney(
+          r.margin?.points
+        )}</td><td><strong>${fmtMoney(r.final_price)}</strong></td><td>${fmtMoney(r.final_rate)}%</td></tr>`;
+      })
+      .join("") +
+    "</tbody></table></div>" +
+    '<div id="eligibleDetail" class="ledger-panel hidden"></div>';
+
+  eEl.querySelectorAll(".eligible-row").forEach((tr) => {
+    tr.addEventListener("click", () => {
+      const r = eligible[parseInt(tr.dataset.i, 10)];
+      const panel = $("eligibleDetail");
+      panel.classList.remove("hidden");
+      panel.innerHTML = `<h3>Price breakdown · ${r.product_id}</h3>${ledgerHtml(r.steps)}`;
+      eEl.querySelectorAll(".eligible-row").forEach((x) => x.classList.remove("row-active"));
+      tr.classList.add("row-active");
+    });
+  });
 
   const iEl = $("ineligible");
   iEl.classList.toggle("hidden", !ineligible.length);
   iEl.innerHTML =
     "<h2>Ineligible</h2>" +
+    '<div class="table-scroll"><table class="results-table"><thead><tr><th>Product</th><th>Investor</th><th>Lock</th><th>Reasons</th></tr></thead><tbody>' +
     ineligible
       .map(
-        (r) => `<div class="card">
-          <strong>${r.product_id}</strong> · ${r.investor} · lock ${r.lock_period_days}d
-          <ul>${(r.reasons || []).map((x) => `<li>${x}</li>`).join("")}</ul>
-        </div>`
+        (r) =>
+          `<tr><td>${r.product_id}</td><td>${r.investor}</td><td>${r.lock_period_days}d</td><td><ul class="reason-list">${(
+            r.reasons || []
+          )
+            .map((x) => `<li>${x}</li>`)
+            .join("")}</ul></td></tr>`
       )
-      .join("");
+      .join("") +
+    "</tbody></table></div>";
 }
+
+["filterProduct", "filterInvestor", "filterLock", "filterEligible"].forEach((id) =>
+  $(id)?.addEventListener("change", () => lastData && renderResults(lastData))
+);
 
 $("runBtn").addEventListener("click", async () => {
   const errEl = $("formErr");
@@ -135,16 +261,16 @@ async function loadScenarios() {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "ghost";
-    b.textContent = sc.name.replace(/_/g, " ");
+    b.textContent = sc.name;
     b.addEventListener("click", () => {
       const L = sc.loan;
-      $("heloc_amount").value = L.heloc_amount;
-      $("first_lien_balance").value = L.first_lien_balance;
+      $("heloc_amount").value = Number(L.heloc_amount).toLocaleString("en-US");
+      $("first_lien_balance").value = Number(L.first_lien_balance).toLocaleString("en-US");
       $("lock_period_days").value = L.lock_period_days ?? "";
       $("product_id").value = L.product_id ?? "";
       $("fico").value = sc.borrower.fico;
       $("dti").value = sc.borrower.dti;
-      $("value").value = sc.property.value;
+      $("value").value = Number(sc.property.value).toLocaleString("en-US");
       $("occupancy").value = sc.property.occupancy;
       $("property_type").value = sc.property.property_type;
       updateCltv();

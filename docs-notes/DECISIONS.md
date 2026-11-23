@@ -9,7 +9,8 @@
 
 | ID | Assumption | Question for Sai |
 |----|------------|------------------|
-| A1 | CLTV = (first lien + HELOC line) / property value × 100; value must be > 0. | Confirm lien inclusion and rounding for CLTV bands. |
+| A1 | CLTV = (first lien + HELOC line) / property value × 100; value must be > 0. Rounded to 2 dp with ROUND_HALF_UP before any band lookup; the rounded CLTV is returned in the API. | Confirm lien inclusion and whether HALF_UP matches investor systems. |
+| R1 | Ineligible rate rows collect every failure reason (grid A, each grid B attribute, margins) in one list. | Should reasons be de-duplicated or ranked? |
 | A2 | Loan amount for grid B bands and margins = HELOC line amount. | Should total liens or draw amount be used instead? |
 | A3 | Bands inclusive; blank max = no upper limit; overlaps rejected on upload; gaps → ineligible with axis-specific reason. | Any products that allow gap pricing? |
 | A4 | Blank / NA / N/A grid cells → ineligible with grid, row, column in reason. | Should NA mean “not offered” vs hard decline? |

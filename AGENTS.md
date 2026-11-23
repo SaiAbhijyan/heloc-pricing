@@ -19,7 +19,7 @@ This repo is local only. Do not add a git remote or push.
 | `app/main.py` | FastAPI routes and static pages |
 | `app/models.py` | Request validation |
 | `static/` | HTML, CSS, JS (no build) |
-| `examples/` | SYNTHETIC and EXAMPLE data |
+| `examples/` | SYNTHETIC data only (`scripts/make_synthetic.py`) |
 | `tests/` | pytest |
 
 ## Commands
@@ -33,7 +33,7 @@ This repo is local only. Do not add a git remote or push.
 
 ## Pricing math (see `app/pricing.py`)
 
-- `CLTV = (first_lien_balance + heloc_amount) / property_value × 100`
+- `CLTV = (first_lien_balance + heloc_amount) / property_value × 100`, rounded to 2 dp (ROUND_HALF_UP) before band lookup
 - `final_price = base_price + sum(LLPA points) − margin_points`
 - `margin_points = margin_percent + (margin_dollar / heloc_amount) × 100`
 - `final_rate = base_rate` (unchanged in this build)

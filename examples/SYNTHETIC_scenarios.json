@@ -1,7 +1,7 @@
 {
   "scenarios": [
     {
-      "name": "clean_eligible",
+      "name": "Clean eligible (primary SF)",
       "loan": {
         "heloc_amount": 150000,
         "first_lien_balance": 320000,
@@ -18,10 +18,10 @@
       }
     },
     {
-      "name": "high_cltv",
+      "name": "High CLTV (hits & NA)",
       "loan": {
         "heloc_amount": 200000,
-        "first_lien_balance": 450000
+        "first_lien_balance": 520000
       },
       "borrower": {
         "fico": 720,
@@ -34,13 +34,13 @@
       }
     },
     {
-      "name": "low_fico",
+      "name": "Low FICO (outside bands)",
       "loan": {
         "heloc_amount": 75000,
         "first_lien_balance": 180000
       },
       "borrower": {
-        "fico": 625,
+        "fico": 615,
         "dti": 40
       },
       "property": {
@@ -50,7 +50,7 @@
       }
     },
     {
-      "name": "investment_condo",
+      "name": "Investment condo",
       "loan": {
         "heloc_amount": 120000,
         "first_lien_balance": 0
@@ -66,7 +66,7 @@
       }
     },
     {
-      "name": "high_dti",
+      "name": "High DTI",
       "loan": {
         "heloc_amount": 90000,
         "first_lien_balance": 220000
@@ -82,7 +82,7 @@
       }
     },
     {
-      "name": "jumbo_line",
+      "name": "Jumbo line (500k+ band)",
       "loan": {
         "heloc_amount": 550000,
         "first_lien_balance": 400000
@@ -98,7 +98,7 @@
       }
     },
     {
-      "name": "out_of_margin_range",
+      "name": "Out of margin range",
       "loan": {
         "heloc_amount": 15000,
         "first_lien_balance": 100000
@@ -109,6 +109,22 @@
       },
       "property": {
         "value": 280000,
+        "occupancy": "primary",
+        "property_type": "single_family"
+      }
+    },
+    {
+      "name": "Mixed CLTV column (low CLTV only)",
+      "loan": {
+        "heloc_amount": 80000,
+        "first_lien_balance": 200000
+      },
+      "borrower": {
+        "fico": 640,
+        "dti": 36
+      },
+      "property": {
+        "value": 800000,
         "occupancy": "primary",
         "property_type": "single_family"
       }

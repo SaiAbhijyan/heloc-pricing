@@ -6,6 +6,8 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -19,12 +21,18 @@ from app.serialize import format_result_payload
 STATIC = Path(__file__).resolve().parent.parent / "static"
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
-app = FastAPI(title="HELOC Pricing Engine", version="1.0.0")
 
-
-@app.on_event("startup")
-def _startup() -> None:
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
     store.init_db()
+    if store.missing_config():
+        from app.seed import load_all
+
+        load_all()
+    yield
+
+
+app = FastAPI(title="HELOC Pricing Engine", version="1.0.0", lifespan=_lifespan)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -33,6 +41,25 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+        '<rect width="32" height="32" rx="6" fill="#1e4d8c"/>'
+        '<text x="16" y="22" text-anchor="middle" fill="#fff" font-size="14" font-family="sans-serif">H</text>'
+        "</svg>"
+    )
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+@app.get("/api/products")
+def list_products():
+    rows = store.load_rate_sheet()
+    if not rows:
+        raise HTTPException(409, "rate sheet not loaded")
+    return {"product_ids": sorted({r["product_id"] for r in rows})}
 
 
 @app.get("/")

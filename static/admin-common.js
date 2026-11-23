@@ -1,6 +1,8 @@
-function metaLine(meta) {
-  if (!meta || !meta.uploaded_at) return "No data stored yet.";
-  return `Last upload: ${meta.file_name || "—"} at ${meta.uploaded_at}`;
+function metaLine(meta, rowCount) {
+  if (!meta?.uploaded_at) return "No upload yet.";
+  const t = new Date(meta.uploaded_at).toLocaleString();
+  const n = rowCount != null ? `, ${rowCount} rows` : "";
+  return `Loaded ${meta.filename || "—"} at ${t}${n}`;
 }
 
 async function uploadFile(component, file, preview) {

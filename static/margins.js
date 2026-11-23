@@ -27,7 +27,7 @@ let rows = [];
 async function load() {
   const res = await fetch("/api/admin/margins");
   const data = await res.json();
-  document.getElementById("meta").textContent = metaLine(data.meta);
+  document.getElementById("meta").textContent = metaLine(data.meta, (data.rows || []).length);
   rows = (data.rows || []).map((r) =>
     Object.fromEntries(COLS.map((c) => [c, r[c] ?? ""]))
   );

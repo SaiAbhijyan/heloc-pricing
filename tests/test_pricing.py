@@ -3,11 +3,12 @@ from decimal import Decimal
 import pytest
 
 from app.pricing import (
-    cell_adjustment,
     find_margin_row,
     grid_a_llpa,
     grid_b_llpa,
     margin_points,
+    price_one_rate_row,
+    round_cltv_for_lookup,
     run_pricing,
 )
 from app.parsers import parse_grid_a
@@ -29,8 +30,50 @@ def test_blank_cell_ineligible(grids):
 
 def test_na_cell_reason(grids):
     ga, _ = grids
-    _, _, reasons = grid_a_llpa(625, Decimal("87"), ga)
-    assert any("grid A" in r for r in reasons)
+    _, _, reasons = grid_a_llpa(625, Decimal("86"), ga)
+    assert any("Grid A" in r and "NA" in r for r in reasons)
+
+
+def test_cltv_round_half_up_band_boundary(seeded, grids):
+    ga, gb = grids
+    margins = seeded.load_margins()
+    rate = {
+        "product_id": "P",
+        "investor": "I",
+        "lock_period_days": 30,
+        "base_rate": Decimal("7.5"),
+        "base_price": Decimal("100"),
+    }
+    borrower = {"fico": 760, "dti": 32}
+    prop = {"occupancy": "primary", "property_type": "single_family"}
+    cltv_a = round_cltv_for_lookup(Decimal("60.004"))
+    cltv_b = round_cltv_for_lookup(Decimal("60.005"))
+    assert cltv_a == Decimal("60.00")
+    assert cltv_b == Decimal("60.01")
+    la, _, reasons_a = grid_a_llpa(760, cltv_a, ga)
+    lb, _, reasons_b = grid_a_llpa(760, cltv_b, ga)
+    assert not reasons_a and not reasons_b
+    assert la[0]["column"] == "0-60"
+    assert lb[0]["column"] == "60.01-70"
+
+
+def test_collect_all_ineligibility_reasons(seeded, grids):
+    ga, gb = grids
+    margins = seeded.load_margins()
+    rate = {
+        "product_id": "P",
+        "investor": "I",
+        "lock_period_days": 30,
+        "base_rate": Decimal("7.5"),
+        "base_price": Decimal("100"),
+    }
+    borrower = {"fico": 615, "dti": 55}
+    prop = {"occupancy": "farm", "property_type": "single_family"}
+    r = price_one_rate_row(
+        rate, borrower, prop, Decimal("5000"), Decimal("70"), ga, gb, margins
+    )
+    assert not r["eligible"]
+    assert len(r["reasons"]) >= 2
 
 
 def test_grid_b_missing_manufactured(grids):

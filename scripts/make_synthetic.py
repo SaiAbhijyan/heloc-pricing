@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import json
-import random
 from decimal import Decimal
 from pathlib import Path
 
@@ -12,7 +11,6 @@ from openpyxl import Workbook
 
 ROOT = Path(__file__).resolve().parent.parent
 EX = ROOT / "examples"
-random.seed(42)
 
 CLTV = ["0-60", "60.01-70", "70.01-75", "75.01-80", "80.01-85", "85.01-90"]
 FICO_ROWS = [
@@ -34,89 +32,148 @@ PRODUCTS = [
     "HELOC-FIXED-RATE-LOCK",
     "HELOC-INVESTOR",
 ]
-INVESTORS = ["BayView", "PennyMac", "Citadel", "Angel Oak"]
+INVESTORS = [
+    "Northwind Capital (synthetic)",
+    "Bluefin Lending (synthetic)",
+    "Cedar Trust (synthetic)",
+    "Harbor Point Funding (synthetic)",
+]
 LOCKS = [15, 30, 45, 60]
+
+PRODUCT_RATE_BUMP = {
+    "HELOC-10YR-DRAW-20YR-REPAY": Decimal("0"),
+    "HELOC-PIGGYBACK": Decimal("0.25"),
+    "HELOC-FIXED-RATE-LOCK": Decimal("0.75"),
+    "HELOC-INVESTOR": Decimal("1.1"),
+}
 
 
 def rate_sheet_rows():
     rows = []
-    rate = Decimal("7.25")
-    for p in PRODUCTS:
-        for inv in INVESTORS:
-            for i, lock in enumerate(LOCKS):
-                adj = Decimal(i) * Decimal("0.18") + Decimal(hash((p, inv)) % 7) / Decimal("100")
-                br = (rate + adj + Decimal(lock) / Decimal("400")).quantize(Decimal("0.001"))
-                bp = (Decimal("100") + Decimal(hash((inv, lock, p)) % 30) / Decimal("100") - Decimal(lock) / Decimal("200")).quantize(Decimal("0.001"))
+    base = Decimal("7.5")
+    for pi, p in enumerate(PRODUCTS):
+        for ii, inv in enumerate(INVESTORS):
+            for li, lock in enumerate(LOCKS):
+                lock_hit = Decimal(li) * Decimal("-0.125")
+                br = (
+                    base
+                    + PRODUCT_RATE_BUMP[p]
+                    + Decimal(ii) * Decimal("0.12")
+                    + Decimal(lock) / Decimal("800")
+                ).quantize(Decimal("0.001"))
+                bp = (
+                    Decimal("100")
+                    + Decimal(pi) * Decimal("0.35")
+                    - Decimal(lock) / Decimal("250")
+                    + lock_hit
+                ).quantize(Decimal("0.001"))
                 rows.append((p, inv, lock, br, bp))
     return rows
+
+
+def grid_a_cell(fmin: int, fmax: int | None, j: int) -> str:
+    if fmin < 660 and j >= 4:
+        return "NA"
+    if fmin < 640 and j >= 5:
+        return "NA"
+    if fmax is None and j == 0:
+        return "0.000"
+    if fmin < 640 and j == 4:
+        return "-2.250"
+    drop = Decimal(820 - (fmax or 820)) / Decimal(50)
+    cltv_hit = Decimal(j) * Decimal("0.22")
+    val = -(drop / Decimal("4") + cltv_hit)
+    return str(val.quantize(Decimal("0.001")))
 
 
 def grid_a_rows():
     rows = []
     for fmin, fmax in FICO_ROWS:
-        cells = []
-        for j, _ in enumerate(CLTV):
-            if fmin < 640 and j >= 4:
-                cells.append("NA")
-            elif fmin < 660 and j == 5:
-                cells.append("NA")
-            else:
-                hit = -Decimal((fmax or 820) - fmin + j) / Decimal("80")
-                cells.append(str(hit.quantize(Decimal("0.001"))))
+        cells = [grid_a_cell(fmin, fmax, j) for j in range(len(CLTV))]
         rows.append((fmin, "" if fmax is None else fmax, cells))
     return rows
 
 
 def grid_b_rows():
     rows = []
-    occ = [("occupancy", "primary"), ("occupancy", "second_home"), ("occupancy", "investment")]
-    ptype = [
-        ("property_type", "single_family"),
-        ("property_type", "pud"),
-        ("property_type", "condo"),
-        ("property_type", "2_4_unit"),
-        ("property_type", "manufactured"),
-    ]
-    fico_b = [
-        f"{lo}-{hi}" if hi is not None else f"{lo}+"
-        for lo, hi in FICO_ROWS
-    ]
-    amt_b = ["25000-99999", "100000-249999", "250000-499999", "500000-1000000"]
-    dti_b = ["0-36", "36.01-43", "43.01-50"]
-    for attr, band in occ + ptype:
-        cells = []
-        for j, col in enumerate(CLTV):
-            if band == "manufactured":
-                cells.append("NA")
-            elif band == "investment" and "condo" in str(band):
-                cells.append("NA")
-            elif band == "investment" and j >= 4:
-                cells.append(str(Decimal("-0.75")))
-            elif band == "condo" and j >= 3:
-                cells.append(str(Decimal("-0.5")))
-            else:
-                cells.append(str(Decimal("-0.125") * (j + 1)))
-        rows.append((attr, band, cells))
-    for band in fico_b:
-        cells = [str(Decimal("-0.05") * (j + 1)) for j in range(len(CLTV))]
+
+    def occ_cell(band: str, j: int) -> str:
+        if band == "primary":
+            return "0.000"
+        if band == "second_home":
+            return str((Decimal("-0.250") - Decimal(j) * Decimal("0.1")).quantize(Decimal("0.001")))
+        if j >= 3:
+            return "NA"
+        return str((Decimal("-0.750") - Decimal(j) * Decimal("0.2")).quantize(Decimal("0.001")))
+
+    for band in ("primary", "second_home", "investment"):
+        rows.append(("occupancy", band, [occ_cell(band, j) for j in range(len(CLTV))]))
+
+    def ptype_cell(band: str, j: int) -> str:
+        if band in ("single_family", "pud"):
+            return "0.000"
+        if band == "manufactured":
+            return "NA"
+        if band == "2_4_unit" and j >= 4:
+            return "NA"
+        if band == "condo":
+            return str((Decimal("-0.125") - Decimal(j) * Decimal("0.075")).quantize(Decimal("0.001")))
+        return str((Decimal("-0.375") - Decimal(j) * Decimal("0.15")).quantize(Decimal("0.001")))
+
+    for band in ("single_family", "pud", "condo", "2_4_unit", "manufactured"):
+        rows.append(("property_type", band, [ptype_cell(band, j) for j in range(len(CLTV))]))
+
+    for fmin, fmax in FICO_ROWS:
+        band = f"{fmin}-{fmax}" if fmax is not None else f"{fmin}+"
+        if fmin >= 700:
+            cells = ["0.000"] * len(CLTV)
+        else:
+            cells = [
+                str((Decimal("-0.125") - Decimal((700 - fmin) / 40) * Decimal(j) * Decimal("0.05")).quantize(Decimal("0.001")))
+                for j in range(len(CLTV))
+            ]
         rows.append(("fico", band, cells))
-    for band in amt_b:
-        cells = [str(Decimal("-0.02") * j) for j in range(len(CLTV))]
-        rows.append(("loan_amount", band, cells))
-    for band in dti_b:
+
+    amt_bands = ["25000-99999", "100000-249999", "250000-499999", "500000-1000000"]
+    for bi, band in enumerate(amt_bands):
         cells = []
         for j in range(len(CLTV)):
-            extra = Decimal("-0.35") if band.startswith("43") and j >= 3 else Decimal("-0.1") * j
-            cells.append(str(extra))
+            if bi == 0:
+                cells.append("-0.250")
+            elif bi == 1:
+                cells.append("0.000")
+            elif bi == 2:
+                cells.append("-0.125")
+            elif j >= 4:
+                cells.append("NA")
+            else:
+                cells.append("-0.375")
+        rows.append(("loan_amount", band, cells))
+
+    for bi, band in enumerate(("0-36", "36.01-43", "43.01-50")):
+        cells = []
+        for j in range(len(CLTV)):
+            if bi == 0:
+                cells.append("0.000")
+            elif bi == 1:
+                cells.append(
+                    str((Decimal("-0.125") - Decimal(j) * Decimal("0.05")).quantize(Decimal("0.001")))
+                )
+            elif j >= 4:
+                cells.append("NA")
+            else:
+                cells.append(
+                    str((Decimal("-0.375") - Decimal(j) * Decimal("0.15")).quantize(Decimal("0.001")))
+                )
         rows.append(("dti", band, cells))
     return rows
 
 
 def margin_rows():
     return [
-        (25000, 99999, Decimal("495"), Decimal("0.15")),
+        (25000, 99999, Decimal("495"), Decimal("0.150")),
         (100000, 249999, Decimal("795"), Decimal("0.125")),
-        (250000, 499999, Decimal("995"), Decimal("0.1")),
+        (250000, 499999, Decimal("995"), Decimal("0.100")),
         (500000, 1000000, Decimal("1495"), Decimal("0.085")),
     ]
 
@@ -134,28 +191,12 @@ def main():
     rs = rate_sheet_rows()
     write_csv(
         EX / "SYNTHETIC_rate_sheet.csv",
-        list(
-            [
-                "product_id",
-                "investor",
-                "lock_period_days",
-                "base_rate",
-                "base_price",
-            ]
-        ),
+        ["product_id", "investor", "lock_period_days", "base_rate", "base_price"],
         rs,
     )
     wb = Workbook()
     ws = wb.active
-    ws.append(
-        [
-            "product_id",
-            "investor",
-            "lock_period_days",
-            "base_rate",
-            "base_price",
-        ]
-    )
+    ws.append(["product_id", "investor", "lock_period_days", "base_rate", "base_price"])
     for row in rs:
         ws.append(list(row))
     wb.save(EX / "SYNTHETIC_rate_sheet.xlsx")
@@ -177,53 +218,54 @@ def main():
         ["loan_amount_min", "loan_amount_max", "margin_dollar", "margin_percent"],
         mg,
     )
-    # EXAMPLE_ aliases for brief
-    for name in ("EXAMPLE_rate_sheet.csv", "EXAMPLE_grid_a.csv", "EXAMPLE_grid_b.csv", "EXAMPLE_margins.csv"):
-        src = EX / ("SYNTHETIC_" + name.replace("EXAMPLE_", ""))
-        if src.exists():
-            (EX / name).write_text(src.read_text())
     scenarios = [
         {
-            "name": "clean_eligible",
+            "name": "Clean eligible (primary SF)",
             "loan": {"heloc_amount": 150000, "first_lien_balance": 320000, "lock_period_days": 45},
             "borrower": {"fico": 760, "dti": 32},
             "property": {"value": 650000, "occupancy": "primary", "property_type": "single_family"},
         },
         {
-            "name": "high_cltv",
-            "loan": {"heloc_amount": 200000, "first_lien_balance": 450000},
+            "name": "High CLTV (hits & NA)",
+            "loan": {"heloc_amount": 200000, "first_lien_balance": 520000},
             "borrower": {"fico": 720, "dti": 38},
             "property": {"value": 700000, "occupancy": "primary", "property_type": "single_family"},
         },
         {
-            "name": "low_fico",
+            "name": "Low FICO (outside bands)",
             "loan": {"heloc_amount": 75000, "first_lien_balance": 180000},
-            "borrower": {"fico": 625, "dti": 40},
+            "borrower": {"fico": 615, "dti": 40},
             "property": {"value": 350000, "occupancy": "primary", "property_type": "single_family"},
         },
         {
-            "name": "investment_condo",
+            "name": "Investment condo",
             "loan": {"heloc_amount": 120000, "first_lien_balance": 0},
             "borrower": {"fico": 700, "dti": 42},
             "property": {"value": 400000, "occupancy": "investment", "property_type": "condo"},
         },
         {
-            "name": "high_dti",
+            "name": "High DTI",
             "loan": {"heloc_amount": 90000, "first_lien_balance": 220000},
             "borrower": {"fico": 710, "dti": 48},
             "property": {"value": 480000, "occupancy": "primary", "property_type": "pud"},
         },
         {
-            "name": "jumbo_line",
+            "name": "Jumbo line (500k+ band)",
             "loan": {"heloc_amount": 550000, "first_lien_balance": 400000},
             "borrower": {"fico": 780, "dti": 28},
             "property": {"value": 1200000, "occupancy": "primary", "property_type": "single_family"},
         },
         {
-            "name": "out_of_margin_range",
+            "name": "Out of margin range",
             "loan": {"heloc_amount": 15000, "first_lien_balance": 100000},
             "borrower": {"fico": 740, "dti": 35},
             "property": {"value": 280000, "occupancy": "primary", "property_type": "single_family"},
+        },
+        {
+            "name": "Mixed CLTV column (low CLTV only)",
+            "loan": {"heloc_amount": 80000, "first_lien_balance": 200000},
+            "borrower": {"fico": 640, "dti": 36},
+            "property": {"value": 800000, "occupancy": "primary", "property_type": "single_family"},
         },
     ]
     (EX / "SYNTHETIC_scenarios.json").write_text(json.dumps({"scenarios": scenarios}, indent=2))

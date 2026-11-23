@@ -98,6 +98,43 @@ def test_validation_422(client):
     assert r.status_code == 422
 
 
+def test_response_summary_and_steps(client):
+    r = client.post(
+        "/api/eligibility",
+        json={
+            "loan": {
+                "heloc_amount": 150000,
+                "first_lien_balance": 320000,
+                "lock_period_days": 45,
+            },
+            "borrower": {"fico": 760, "dti": 32},
+            "property": {
+                "value": 650000,
+                "occupancy": "primary",
+                "property_type": "single_family",
+            },
+        },
+    )
+    body = r.json()
+    assert "summary" in body
+    assert body["summary"]["eligible_count"] >= 1
+    hit = next(x for x in body["results"] if x["eligible"])
+    assert hit.get("steps") and hit["steps"][0]["label"] == "Base price"
+
+
+def test_synthetic_investor_names(client):
+    rows = client.get("/api/admin/rate-sheet").json()["rows"]
+    text = " ".join(r["investor"] for r in rows)
+    for bad in ("BayView", "PennyMac", "Citadel", "Angel Oak"):
+        assert bad not in text
+    assert "(synthetic)" in text
+
+
+def test_favicon(client):
+    r = client.get("/favicon.ico")
+    assert r.status_code == 200
+
+
 def test_put_margins_validation(client):
     r = client.put(
         "/api/admin/margins",

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HELOC Eligibility</title>
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -16,45 +17,75 @@
         <section>
           <h2>Loan</h2>
           <label>HELOC line amount ($)</label>
-          <input id="heloc_amount" type="number" min="1" step="1000" value="150000" />
+          <input id="heloc_amount" type="text" inputmode="decimal" value="150,000" data-field="heloc" />
+          <p id="err_heloc" class="field-err hidden"></p>
           <label>First lien balance ($)</label>
-          <input id="first_lien_balance" type="number" min="0" step="1000" value="320000" />
-          <label>Lock period (days, optional)</label>
-          <input id="lock_period_days" type="number" placeholder="all locks" />
-          <label>Product id (optional)</label>
-          <input id="product_id" type="text" placeholder="filter one product" />
+          <input id="first_lien_balance" type="text" inputmode="decimal" value="320,000" data-field="lien" />
+          <p id="err_lien" class="field-err hidden"></p>
+          <label>Lock period</label>
+          <select id="lock_period_days">
+            <option value="">All locks</option>
+            <option value="15">15 days</option>
+            <option value="30">30 days</option>
+            <option value="45" selected>45 days</option>
+            <option value="60">60 days</option>
+          </select>
+          <label>Product (optional filter)</label>
+          <select id="product_id">
+            <option value="">All products</option>
+          </select>
         </section>
         <section>
           <h2>Borrower</h2>
           <label>FICO (300–850)</label>
           <input id="fico" type="number" min="300" max="850" value="760" />
+          <p id="err_fico" class="field-err hidden"></p>
           <label>DTI (%)</label>
           <input id="dti" type="number" min="0" max="100" step="0.1" value="32" />
+          <p id="err_dti" class="field-err hidden"></p>
         </section>
         <section>
           <h2>Property</h2>
           <label>Property value ($)</label>
-          <input id="value" type="number" min="1" step="1000" value="650000" />
+          <input id="value" type="text" inputmode="decimal" value="650,000" data-field="value" />
+          <p id="err_value" class="field-err hidden"></p>
           <label>Occupancy</label>
           <select id="occupancy">
-            <option value="primary">primary</option>
-            <option value="second_home">second_home</option>
-            <option value="investment">investment</option>
+            <option value="primary">Primary</option>
+            <option value="second_home">Second home</option>
+            <option value="investment">Investment</option>
           </select>
           <label>Property type</label>
-          <input id="property_type" type="text" value="single_family" />
+          <select id="property_type">
+            <option value="single_family">Single family</option>
+            <option value="pud">PUD</option>
+            <option value="condo">Condo</option>
+            <option value="2_4_unit">2–4 unit</option>
+            <option value="manufactured">Manufactured</option>
+          </select>
           <p>CLTV: <span id="cltvLive">—</span>%</p>
         </section>
       </div>
       <div class="row" style="margin-top:0.75rem">
         <button type="button" id="runBtn">Get eligibility</button>
-        <span id="scenarioBtns"></span>
+        <span id="scenarioBtns" class="scenario-btns"></span>
       </div>
-      <p id="formErr" class="err hidden"></p>
+      <p id="formErr" class="err alert hidden" role="alert"></p>
     </div>
-    <p id="summary" class="hidden"></p>
-    <div id="eligible" class="card hidden"></div>
-    <div id="ineligible" class="card hidden"></div>
+    <div id="resultsPanel" class="hidden">
+      <div id="summaryBar" class="summary-bar card"></div>
+      <div class="card">
+        <div class="row filters">
+          <label class="inline">Filter product <select id="filterProduct"><option value="">All</option></select></label>
+          <label class="inline">Investor <select id="filterInvestor"><option value="">All</option></select></label>
+          <label class="inline">Lock <select id="filterLock"><option value="">All</option></select></label>
+          <label class="inline"><input type="checkbox" id="filterEligible" /> Eligible only</label>
+        </div>
+      </div>
+      <span id="summary" class="hidden"></span>
+      <div id="eligible" class="card hidden"></div>
+      <div id="ineligible" class="card hidden"></div>
+    </div>
   </main>
   <script src="/static/nav.js"></script>
   <script src="/static/app.js"></script>

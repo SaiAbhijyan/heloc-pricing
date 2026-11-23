@@ -1,21 +1,35 @@
 mountNav("/grids");
 
-function gridTable(container, labels, rows, rowKeys) {
-  const head = rowKeys.concat(labels);
-  let html = "<table><thead><tr>" + head.map((h) => `<th>${h}</th>`).join("") + "</tr></thead><tbody>";
+function formatMeta(meta, rowCount) {
+  if (!meta?.uploaded_at) return "No upload yet.";
+  const t = new Date(meta.uploaded_at).toLocaleString();
+  return `Loaded ${meta.filename} at ${t}, ${rowCount} rows`;
+}
+
+function gridTable(container, labels, rows, rowKeys, yPrefix) {
+  const head = rowKeys.map((k) => `<th class="grid-y-label">${k}</th>`).join("");
+  const cltvHead = labels
+    .map((h) => `<th class="cltv-head">${h}<small>CLTV %</small></th>`)
+    .join("");
+  let html =
+    '<motion-remove/><div class="table-scroll"><table class="grid-table"><thead><tr>' +
+    head +
+    cltvHead +
+    "</tr></thead><tbody>";
   rows.forEach((r, ri) => {
     html += "<tr>";
     rowKeys.forEach((k) => {
-      html += `<td><input data-ri="${ri}" data-k="${k}" data-cltv="" value="${r[k] ?? ""}" /></td>`;
+      html += `<td class="grid-y-label"><input data-ri="${ri}" data-k="${k}" data-cltv="" value="${r[k] ?? ""}" /></td>`;
     });
     labels.forEach((lb) => {
       const v = (r.cells && r.cells[lb]) ?? "";
-      html += `<td><input data-ri="${ri}" data-cltv="${lb}" data-k="" value="${v}" /></td>`;
+      const na = String(v).toUpperCase() === "NA" || String(v).toUpperCase() === "N/A";
+      html += `<td class="${na ? "na-cell" : ""}"><input data-ri="${ri}" data-cltv="${lb}" data-k="" value="${v}" /></td>`;
     });
     html += "</tr>";
   });
-  html += "</tbody></table>";
-  container.innerHTML = html;
+  html += "</tbody></table></div>";
+  container.innerHTML = html.replace("<motion-remove/>", "");
 }
 
 let gridA = { cltv_labels: [], rows: [] };
@@ -42,10 +56,9 @@ function readGrid(container, labels, rowKeys) {
 async function loadA() {
   const res = await fetch("/api/admin/grid-a");
   const data = await res.json();
-  document.getElementById("metaA").textContent = data.meta?.uploaded_at
-    ? `File: ${data.meta.file_name}`
-    : "No grid A yet.";
   const g = data.data;
+  const n = g?.rows?.length ?? 0;
+  document.getElementById("metaA").textContent = formatMeta(data.meta, n);
   if (!g) return;
   gridA = { cltv_labels: g.cltv_labels, rows: g.rows };
   gridTable(document.getElementById("tableA"), g.cltv_labels, g.rows, ["fico_min", "fico_max"]);
@@ -54,10 +67,9 @@ async function loadA() {
 async function loadB() {
   const res = await fetch("/api/admin/grid-b");
   const data = await res.json();
-  document.getElementById("metaB").textContent = data.meta?.uploaded_at
-    ? `File: ${data.meta.file_name}`
-    : "No grid B yet.";
   const g = data.data;
+  const n = g?.rows?.length ?? 0;
+  document.getElementById("metaB").textContent = formatMeta(data.meta, n);
   if (!g) return;
   gridB = { cltv_labels: g.cltv_labels, rows: g.rows };
   gridTable(document.getElementById("tableB"), g.cltv_labels, g.rows, ["attribute", "band"]);
@@ -71,8 +83,15 @@ document.getElementById("saveA").addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cltv_labels: gridA.cltv_labels, rows }),
   });
-  if (!res.ok) alert(JSON.stringify(await res.json()));
-  else loadA();
+  const errEl = document.getElementById("uploadErrA");
+  if (!res.ok) {
+    const data = await res.json();
+    errEl.textContent = JSON.stringify(data.detail || data);
+    errEl.classList.remove("hidden");
+    return;
+  }
+  errEl.classList.add("hidden");
+  loadA();
 });
 
 document.getElementById("saveB").addEventListener("click", async () => {
@@ -83,31 +102,51 @@ document.getElementById("saveB").addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cltv_labels: gridB.cltv_labels, rows }),
   });
-  if (!res.ok) alert(JSON.stringify(await res.json()));
-  else loadB();
+  const errEl = document.getElementById("uploadErrB");
+  if (!res.ok) {
+    const data = await res.json();
+    errEl.textContent = JSON.stringify(data.detail || data);
+    errEl.classList.remove("hidden");
+    return;
+  }
+  errEl.classList.add("hidden");
+  loadB();
 });
 
-async function uploadGrid(component, file, errId) {
+async function previewGrid(component, file, errId, previewId, onCommit) {
   const fd = new FormData();
   fd.append("file", file);
-  const r = await fetch(`/api/admin/${component}`, { method: "POST", body: fd });
+  const r = await fetch(`/api/admin/${component}?preview=true`, { method: "POST", body: fd });
   const data = await r.json();
   const el = document.getElementById(errId);
+  const prev = document.getElementById(previewId);
   if (!data.ok) {
     el.textContent = (data.errors || []).join("; ");
     el.classList.remove("hidden");
+    prev.classList.add("hidden");
     return;
   }
   el.classList.add("hidden");
-  if (component === "grid-a") loadA();
-  else loadB();
+  prev.classList.remove("hidden");
+  const n = data.rows?.rows?.length ?? (Array.isArray(data.rows) ? data.rows.length : 0);
+  prev.innerHTML = `<p class="ok">${n} rows parsed. <button type="button" class="secondary" id="commit${component}">Save</button> <button type="button" class="ghost" id="cancel${component}">Cancel</button></p>`;
+  document.getElementById(`commit${component}`).onclick = async () => {
+    const fd2 = new FormData();
+    fd2.append("file", file);
+    await fetch(`/api/admin/${component}`, { method: "POST", body: fd2 });
+    prev.classList.add("hidden");
+    onCommit();
+  };
+  document.getElementById(`cancel${component}`).onclick = () => prev.classList.add("hidden");
 }
 
 document.getElementById("fileInputA").addEventListener("change", (e) => {
-  if (e.target.files[0]) uploadGrid("grid-a", e.target.files[0], "uploadErrA");
+  if (e.target.files[0])
+    previewGrid("grid-a", e.target.files[0], "uploadErrA", "previewA", loadA);
 });
 document.getElementById("fileInputB").addEventListener("change", (e) => {
-  if (e.target.files[0]) uploadGrid("grid-b", e.target.files[0], "uploadErrB");
+  if (e.target.files[0])
+    previewGrid("grid-b", e.target.files[0], "uploadErrB", "previewB", loadB);
 });
 
 loadA();

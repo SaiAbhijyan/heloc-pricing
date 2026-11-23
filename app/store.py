@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-DB_PATH = Path(__file__).resolve().parent.parent / "heloc.db"
+_DEFAULT_DB = Path(__file__).resolve().parent.parent / "heloc.db"
+DB_PATH = Path(os.environ.get("HELOC_DB", str(_DEFAULT_DB)))
 
 
 def _conn() -> sqlite3.Connection:

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LLPA grids</title>
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -14,6 +15,7 @@
       <p id="metaA"></p>
       <div id="dropZoneA" class="card">Drop grid A CSV or <label><input type="file" id="fileInputA" accept=".csv" /> choose</label></div>
       <p id="uploadErrA" class="err hidden"></p>
+      <div id="previewA" class="hidden"></div>
       <div class="row">
         <a href="/api/admin/grid-a/download" class="ghost" style="padding:0.55rem 0.9rem">Download A</a>
         <button type="button" id="saveA">Save grid A edits</button>
@@ -25,6 +27,7 @@
       <p id="metaB"></p>
       <div id="dropZoneB" class="card">Drop grid B CSV or <label><input type="file" id="fileInputB" accept=".csv" /> choose</label></div>
       <p id="uploadErrB" class="err hidden"></p>
+      <div id="previewB" class="hidden"></div>
       <div class="row">
         <a href="/api/admin/grid-b/download" class="ghost" style="padding:0.55rem 0.9rem">Download B</a>
         <button type="button" id="saveB">Save grid B edits</button>

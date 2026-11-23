@@ -2,7 +2,7 @@
 
 Local HELOC eligibility and price engine with admin uploads and a small web UI.
 
-**All `examples/SYNTHETIC_*` and `EXAMPLE_*` files are fictional. They are not real market prices.**
+**All `examples/SYNTHETIC_*` files are fictional semi-synthetic data. They are not real market prices or real investor names.**
 
 ## Run
 
@@ -12,6 +12,10 @@ python3 -m venv .venv
 .venv/bin/python -m app.seed
 .venv/bin/uvicorn app.main:app --port 8811
 ```
+
+The app auto-seeds from `examples/SYNTHETIC_*` when the database is empty (`HELOC_DB` defaults to `./heloc.db`).
+
+Docker: `docker build -t heloc . && docker run -p 8000:8000 heloc`. Use `render.yaml` for Render.
 
 Open http://127.0.0.1:8811/ for eligibility. Admin tables: `/ratesheet`, `/grids`, `/margins`. API explorer: `/explorer`. Swagger: `/docs`.
 

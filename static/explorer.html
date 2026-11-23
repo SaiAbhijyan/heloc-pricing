@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>API explorer</title>
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -11,7 +12,14 @@
   <main>
     <div class="card">
       <h1>API explorer</h1>
-      <p>OpenAPI docs: <a href="/docs">/docs</a></p>
+      <p>OpenAPI: <a href="/docs">/docs</a></p>
+      <ul class="endpoint-list">
+        <li><code>GET</code> <code>/api/health</code> — liveness</li>
+        <li><code>POST</code> <code>/api/eligibility</code> — price all rate-sheet rows</li>
+        <li><code>GET</code> <code>/api/products</code> — product ids from rate sheet</li>
+        <li><code>GET/POST</code> <code>/api/admin/{rate-sheet|grid-a|grid-b|margins}</code> — config</li>
+        <li><code>GET</code> <code>/api/scenarios</code> — SYNTHETIC scenario payloads</li>
+      </ul>
       <label>Scenario</label>
       <select id="scenario"></select>
       <label>POST /api/eligibility body (JSON)</label>
@@ -20,8 +28,8 @@
         <button type="button" id="send">Send</button>
         <button type="button" id="curl" class="ghost">Copy as curl</button>
       </div>
-      <p id="timing"></p>
-      <pre id="response"></pre>
+      <p id="timing" class="muted"></p>
+      <pre id="response" class="response-box"></pre>
     </div>
   </main>
   <script src="/static/nav.js"></script>

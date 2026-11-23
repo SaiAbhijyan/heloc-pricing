@@ -19,7 +19,7 @@ This repo is local only. Do not add a git remote or push.
 | `app/main.py` | FastAPI routes and static pages |
 | `app/models.py` | Request validation |
 | `static/` | HTML, CSS, JS (no build) |
-| `examples/` | SYNTHETIC and EXAMPLE data |
+| `examples/` | SYNTHETIC data only |
 | `tests/` | pytest |
 
 ## Commands
